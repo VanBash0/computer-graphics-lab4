@@ -25,8 +25,12 @@ private:
     ComPtr<ID3D12DescriptorHeap> mRtvHeap;
     ComPtr<ID3D12DescriptorHeap> mDsvHeap;
     ComPtr<ID3D12Resource> mSwapChainBuffer[swapChainBufferCount];
+    ComPtr<ID3D12Resource> mDepthStencilBuffer;
 
     DXGI_FORMAT mBackBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+    DXGI_FORMAT mDepthStencilFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    D3D12_VIEWPORT mViewport;
+    D3D12_RECT mScissorRect;
     UINT mRtvDescriptorSize;
     UINT mDsvDescriptorSize;
     UINT mCbvSrvDescriptorSize;
@@ -48,6 +52,9 @@ private:
     void createDescriptorHeaps();
     void createRenderTargetViews();
     void createDepthStencilBufferView();
+    void setDepthBufferBeingDepthBuffer();
+    void setViewport();
+    void setScissorRect();
 };
 
 #endif // D3DAPP_H
