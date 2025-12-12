@@ -4,7 +4,7 @@
 #include "d3d12.h"
 #include <exception>
 
-inline void FailCheck(HRESULT hr) {
+inline void failCheck(HRESULT hr) {
     if (FAILED(hr)) {
         throw std::exception("DirectX error. Lol");
     }
