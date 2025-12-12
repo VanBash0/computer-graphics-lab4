@@ -18,6 +18,9 @@
     <ClCompile Include="d3dapp.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="game_timer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -27,6 +30,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="fail_checker.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="game_timer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

@@ -125,6 +125,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="d3dapp.cpp" />
+    <ClCompile Include="game_timer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -132,6 +133,7 @@
   <ItemGroup>
     <ClInclude Include="d3dapp.h" />
     <ClInclude Include="fail_checker.h" />
+    <ClInclude Include="game_timer.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
