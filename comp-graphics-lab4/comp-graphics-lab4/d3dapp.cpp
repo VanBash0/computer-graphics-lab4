@@ -1,4 +1,5 @@
 #include "d3dapp.h"
+#include "d3dx12.h"
 #include "fail_checker.h"
 #include <cassert>
 
@@ -10,6 +11,9 @@ void D3DApp::initialize() {
     checkMSAASupport();
     createCommandObjects();
     createSwapChain();
+    createDescriptorHeaps();
+    createRenderTargetViews();
+    createDepthStencilBufferView();
 }
 
 void D3DApp::enableDebugLayer() {
@@ -76,10 +80,51 @@ void D3DApp::createSwapChain() {
     sd.SampleDesc.Count = m4xMsaaState ? 4 : 1;
     sd.SampleDesc.Quality = m4xMsaaState ? (m4xMsaaQuality - 1) : 0;
     sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    sd.BufferCount = swapChangeBufferCount;
+    sd.BufferCount = swapChainBufferCount;
     sd.OutputWindow = mhMainWnd;
     sd.Windowed = true;
     sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     sd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
     failCheck(mdxgiFactory->CreateSwapChain(mCommandQueue.Get(), &sd, mSwapChain.GetAddressOf()));
+}
+
+void D3DApp::createDescriptorHeaps() {
+    D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc = {};
+    rtvHeapDesc.NumDescriptors = swapChainBufferCount;
+    rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+    rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+    rtvHeapDesc.NodeMask = 0;
+    failCheck(md3dDevice->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(mRtvHeap.GetAddressOf())));
+
+    D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc = {};
+    dsvHeapDesc.NumDescriptors = 1;
+    dsvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+    dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+    dsvHeapDesc.NodeMask = 0;
+    failCheck(md3dDevice->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(mDsvHeap.GetAddressOf())));
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE D3DApp::getCurrentBackBuffer() const {
+    return CD3DX12_CPU_DESCRIPTOR_HANDLE(
+        mRtvHeap->GetCPUDescriptorHandleForHeapStart(),
+        mCurrBackBuffer,
+        mRtvDescriptorSize
+    );
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE D3DApp::getDepthStencilView() const {
+    return mDsvHeap->GetCPUDescriptorHandleForHeapStart();
+}
+
+void D3DApp::createRenderTargetViews() {
+    CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHeapHandle(mRtvHeap->GetCPUDescriptorHandleForHeapStart());
+    for (UINT i = 0; i < swapChainBufferCount; ++i) {
+        failCheck(mSwapChain->GetBuffer(i, IID_PPV_ARGS(mSwapChainBuffer[i].GetAddressOf())));
+        md3dDevice->CreateRenderTargetView(mSwapChainBuffer[i].Get(), nullptr, rtvHeapHandle);
+        rtvHeapHandle.Offset(1, mRtvDescriptorSize);
+    }
+}
+
+void D3DApp::createDepthStencilBufferView() {
+
 }
