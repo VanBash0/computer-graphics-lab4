@@ -66,12 +66,3 @@ void GameTimer::start() {
         mStopped = false;
     }
 }
-
-float GameTimer::getTotalTime() const {
-    if (mStopped) {
-        return static_cast<float>(((mStopTime - mPausedTime) - mBaseTime) * mSecondsPerCount);
-    }
-    else {
-        return static_cast<float>(((mCurrTime - mPausedTime) - mBaseTime) * mSecondsPerCount);
-    }
-}

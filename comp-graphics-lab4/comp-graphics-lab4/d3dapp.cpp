@@ -2,8 +2,15 @@
 #include "d3dx12.h"
 #include "fail_checker.h"
 #include <cassert>
+#include <windowsx.h>
 
-void D3DApp::initialize() {
+D3DApp* D3DApp::mApp = nullptr;
+
+static LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    return D3DApp::getApp()->handleMsgProc(hwnd, msg, wParam, lParam);
+}
+
+void D3DApp::initializeDX() {
     enableDebugLayer();
     createDXGIFactory();
     createDevice();
@@ -12,10 +19,8 @@ void D3DApp::initialize() {
     createCommandObjects();
     createSwapChain();
     createDescriptorHeaps();
-    createRenderTargetViews();
-    createDepthStencilBufferView();
-    setViewport();
-    setScissorRect();
+
+    onResize();
 }
 
 void D3DApp::enableDebugLayer() {
@@ -145,8 +150,9 @@ void D3DApp::createDepthStencilBufferView() {
     optClear.Format = mDepthStencilFormat;
     optClear.DepthStencil.Depth = 1.0f;
     optClear.DepthStencil.Stencil = 0;
+    CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_DEFAULT);
     failCheck(md3dDevice->CreateCommittedResource(
-        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+        &heapProps,
         D3D12_HEAP_FLAG_NONE,
         &depthStencilDesc,
         D3D12_RESOURCE_STATE_DEPTH_WRITE,
@@ -158,10 +164,10 @@ void D3DApp::createDepthStencilBufferView() {
 
 void D3DApp::setDepthBufferBeingDepthBuffer() {
     md3dDevice->CreateDepthStencilView(mDepthStencilBuffer.Get(), nullptr, getDepthStencilView());
-    mCommandList->ResourceBarrier(1,
-        &CD3DX12_RESOURCE_BARRIER::Transition(mDepthStencilBuffer.Get(),
-            D3D12_RESOURCE_STATE_COMMON,
-            D3D12_RESOURCE_STATE_DEPTH_WRITE));
+    D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(mDepthStencilBuffer.Get(),
+        D3D12_RESOURCE_STATE_COMMON,
+        D3D12_RESOURCE_STATE_DEPTH_WRITE);
+    mCommandList->ResourceBarrier(1, &barrier);
 }
 
 void D3DApp::setViewport() {
@@ -180,4 +186,222 @@ void D3DApp::setScissorRect() {
     mScissorRect.right = mClientWidth;
     mScissorRect.bottom = mClientHeight;
     mCommandList->RSSetScissorRects(1, &mScissorRect);
+}
+
+D3DApp::D3DApp(HINSTANCE hInstance) {
+    assert(mApp == nullptr);
+    mApp = this;
+    mhAppInst = hInstance;
+}
+
+D3DApp::~D3DApp() {
+    if (md3dDevice != nullptr) {
+        flushCommandQueue();
+        mApp = nullptr;
+    }
+}
+
+bool D3DApp::initMainWindow(HINSTANCE hInstance, int nCmdShow) {
+    WNDCLASS wnd = {};
+    wnd.style = CS_HREDRAW | CS_VREDRAW;
+    wnd.lpfnWndProc = MainWndProc;
+    wnd.cbClsExtra = 0;
+    wnd.cbWndExtra = 0;
+    wnd.hInstance = hInstance;
+    wnd.hCursor = LoadCursor(nullptr, IDC_ARROW);
+    wnd.hbrBackground = (HBRUSH)GetStockObject(NULL_BRUSH);
+    wnd.lpszClassName = L"MainWnd";
+    RegisterClass(&wnd);
+
+    RECT R = { 0, 0, mClientWidth, mClientHeight };
+    AdjustWindowRect(&R, WS_OVERLAPPEDWINDOW, false);
+
+    mhMainWnd = CreateWindow(L"MainWnd", mMainWndCaption.c_str(), WS_OVERLAPPEDWINDOW,
+        CW_USEDEFAULT, CW_USEDEFAULT, R.right - R.left, R.bottom - R.top,
+        nullptr, nullptr, mhAppInst, nullptr);
+
+    if (!mhMainWnd) {
+        MessageBox(0, L"CreateWindow Failed.", 0, 0);
+        return false;
+    }
+
+    ShowWindow(mhMainWnd, nCmdShow);
+    UpdateWindow(mhMainWnd);
+    return true;
+}
+
+LRESULT D3DApp::handleMsgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    switch (msg) {
+    case WM_ACTIVATE:
+        if (LOWORD(wParam) == WA_INACTIVE) {
+            mAppPaused = true;
+            mTimer.stop();
+        }
+        else {
+            mAppPaused = false;
+            mTimer.start();
+        }
+        return 0;
+
+    case WM_SIZE:
+        mClientWidth = LOWORD(lParam);
+        mClientHeight = HIWORD(lParam);
+        if (md3dDevice) {
+            if (wParam == SIZE_MINIMIZED) {
+                mMinimized = true;
+                mMaximized = false;
+                mAppPaused = true;
+            }
+            else if (wParam == SIZE_MAXIMIZED) {
+                mMinimized = false;
+                mMaximized = true;
+                mAppPaused = false;
+                onResize();
+            }
+            else if (wParam == SIZE_RESTORED) {
+                if (mMinimized) {
+                    mMinimized = false;
+                    onResize();
+                }
+                else if (mMaximized) {
+                    mMaximized = false;
+                    onResize();
+                }
+                else if (mResizing) {
+                }
+                else onResize();
+            }
+        }
+        return 0;
+
+    case WM_ENTERSIZEMOVE:
+        mAppPaused = true;
+        mResizing = true;
+        mTimer.stop();
+        return 0;
+
+    case WM_EXITSIZEMOVE:
+        mAppPaused = false;
+        mResizing = false;
+        mTimer.start();
+        return 0;
+
+    case WM_DESTROY:
+        PostQuitMessage(0);
+        return 0;
+
+    case WM_MENUCHAR:
+        return MAKELRESULT(0, MNC_CLOSE);
+
+    case WM_GETMINMAXINFO:
+        ((MINMAXINFO*)lParam)->ptMinTrackSize.x = 200;
+        ((MINMAXINFO*)lParam)->ptMinTrackSize.y = 200;
+        return 0;
+
+    case WM_LBUTTONDOWN:
+    case WM_MBUTTONDOWN:
+    case WM_RBUTTONDOWN:
+        onMouseDown(wParam, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+        return 0;
+
+    case WM_LBUTTONUP:
+    case WM_MBUTTONUP:
+    case WM_RBUTTONUP:
+        onMouseUp(wParam, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+        return 0;
+
+    case WM_MOUSEMOVE:
+        onMouseMove(wParam, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+        return 0;
+
+    case WM_KEYUP:
+        if (wParam == VK_ESCAPE)
+        {
+            PostQuitMessage(0);
+        }
+        else if ((int)wParam == VK_F2)
+            set4xMsaaState(!m4xMsaaState);
+
+        return 0;
+    }
+
+    return DefWindowProc(hwnd, msg, wParam, lParam);
+}
+
+void D3DApp::onResize() {
+    assert(md3dDevice);
+    assert(mSwapChain);
+
+    flushCommandQueue();
+
+    for (int i = 0; i < swapChainBufferCount; ++i)
+        mSwapChainBuffer[i].Reset();
+
+    mDepthStencilBuffer.Reset();
+
+    DXGI_SWAP_CHAIN_DESC swapChainDesc;
+    mSwapChain->GetDesc(&swapChainDesc);
+
+    failCheck(mSwapChain->ResizeBuffers(swapChainBufferCount, mClientWidth,
+        mClientHeight, swapChainDesc.BufferDesc.Format, swapChainDesc.Flags));
+
+    mCurrBackBuffer = 0;
+
+    createRenderTargetViews();
+    createDepthStencilBufferView();
+    setViewport();
+    setScissorRect();
+}
+
+int D3DApp::run() {
+    MSG msg = {};
+    mTimer.reset();
+    while (msg.message != WM_QUIT) {
+        if (PeekMessage(&msg, 0, 0, 0, PM_REMOVE)) {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+        else {
+            mTimer.tick();
+            if (!mAppPaused) {
+                update(mTimer);
+                draw(mTimer);
+                calculateFrameStats();
+            }
+            else {
+                Sleep(100);
+            }
+        }
+    }
+    return static_cast<int>(msg.wParam);
+}
+
+void D3DApp::flushCommandQueue() {
+    mCurrentFence++;
+    failCheck(mCommandQueue->Signal(mFence.Get(), mCurrentFence));
+
+    if (mFence->GetCompletedValue() < mCurrentFence)
+    {
+        HANDLE eventHandle = CreateEventEx(nullptr, nullptr, 0, EVENT_ALL_ACCESS);
+        failCheck(mFence->SetEventOnCompletion(mCurrentFence, eventHandle));
+        WaitForSingleObject(eventHandle, INFINITE);
+        CloseHandle(eventHandle);
+    }
+}
+
+void D3DApp::calculateFrameStats() {
+    static int frameCount = 0;
+    static float timeElapsed = 0.0f;
+    frameCount++;
+    if ((mTimer.getTotalTime() - timeElapsed) >= 1.0f)
+    {
+        float fps = static_cast<float>(frameCount);
+        float mspf = 1000.0f / fps;
+        std::wstring fpsStr = std::to_wstring(fps);
+        std::wstring mspfStr = std::to_wstring(mspf);
+        std::wstring windowTitle = mMainWndCaption + L"    FPS: " + fpsStr + L"    MSPF: " + mspfStr;
+        SetWindowText(mhMainWnd, windowTitle.c_str());
+        frameCount = 0;
+        timeElapsed += 1.0f;
+    }
 }

@@ -5,6 +5,11 @@
 #include <dxgi1_6.h>
 #include "wrl.h"
 #include "game_timer.h"
+#include <string>
+
+#pragma comment(lib, "d3d12.lib")
+#pragma comment(lib, "dxgi.lib")
+#pragma comment(lib, "d3dcompiler.lib")
 
 using namespace Microsoft::WRL;
 
@@ -15,14 +20,11 @@ public:
     D3DApp& operator=(const D3DApp& rhs) = delete;
     ~D3DApp();
 
-    void initialize();
+    void initializeDX();
     int run();
 
     bool initMainWindow(HINSTANCE hInstance, int nCmdShow);
     LRESULT handleMsgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
-
-    void update(const GameTimer& gt);
-    void draw(const GameTimer& gt);
 
     void onResize();
 
@@ -70,6 +72,7 @@ private:
     std::wstring mMainWndCaption = L"The App";
     GameTimer mTimer;
 
+    UINT64 mCurrentFence = 0;
     UINT mClientWidth = 800;
     UINT mClientHeight = 600;
     bool m4xMsaaState = false;
@@ -96,6 +99,12 @@ private:
     void setDepthBufferBeingDepthBuffer();
     void setViewport();
     void setScissorRect();
+
+    void onMouseDown(WPARAM btnState, int x, int y) {};
+    void onMouseUp(WPARAM btnState, int x, int y) {};
+    void onMouseMove(WPARAM btnState, int x, int y) {};
+    void update(const GameTimer& gt) {};
+    void draw(const GameTimer& gt) {};
 };
 
 #endif // D3DAPP_H
