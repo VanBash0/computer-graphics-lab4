@@ -3,6 +3,11 @@
 #include "fail_checker.h"
 #include <cassert>
 #include <windowsx.h>
+#include "vertex.h"
+#include "d3dutil.h"
+#include <DirectXColors.h>
+
+using namespace DirectX;
 
 D3DApp* D3DApp::mApp = nullptr;
 
@@ -17,6 +22,8 @@ void D3DApp::initializeDX() {
     setFenceAndDescriptorsSize();
     checkMSAASupport();
     createCommandObjects();
+    createVertexBuffer();
+    createIndexBuffer();
     createSwapChain();
     createDescriptorHeaps();
 
@@ -404,4 +411,57 @@ void D3DApp::calculateFrameStats() {
         frameCount = 0;
         timeElapsed += 1.0f;
     }
+}
+
+void D3DApp::createVertexBuffer() {
+    Vertex vertices[] = {
+        { Vector3(-1.f, -1.f, -1.f), Vector4(Colors::White) },
+        { Vector3(-1.f, 1.f, -1.f), Vector4(Colors::Black) },
+        { Vector3(1.f, 1.f, -1.f), Vector4(Colors::Red) },
+        { Vector3(1.f, -1.f, -1.f), Vector4(Colors::Green) },
+        { Vector3(-1.f, -1.f, 1.f), Vector4(Colors::Blue) },
+        { Vector3(-1.f, 1.f, 1.f), Vector4(Colors::Yellow) },
+        { Vector3(1.f, 1.f, 1.f), Vector4(Colors::Cyan) },
+        { Vector3(1.f, -1.f, 1.f), Vector4(Colors::Magenta) }
+    };
+
+    const UINT64 vertexBufferByteSize = 8 * sizeof(Vertex);
+    mVertexBufferGPU = D3DUtil::createDefaultBuffer(md3dDevice.Get(), mCommandList.Get(),
+        vertices, vertexBufferByteSize, mVertexBufferUploader);
+
+    D3D12_VERTEX_BUFFER_VIEW vertexBufferView;
+    vertexBufferView.BufferLocation = mVertexBufferGPU->GetGPUVirtualAddress();
+    vertexBufferView.StrideInBytes = sizeof(Vertex);
+    vertexBufferView.SizeInBytes = vertexBufferByteSize;
+
+    D3D12_VERTEX_BUFFER_VIEW vertexBuffers[1] = { vertexBufferView };
+    mCommandList->IASetVertexBuffers(0, 1, vertexBuffers);
+}
+
+void D3DApp::createIndexBuffer() {
+    std::uint16_t indices[] = {
+        0, 1, 2,
+        0, 2, 3,
+        4, 6, 5,
+        4, 7, 6,
+        4, 5, 1,
+        4, 1, 0,
+        3, 2, 6,
+        3, 6, 7,
+        1, 5, 6,
+        1, 6, 2,
+        4, 0, 3,
+        4, 3, 7
+    };
+
+    const UINT indexBufferByteSize = 36 * sizeof(std::uint16_t);
+    mIndexBufferGPU = D3DUtil::createDefaultBuffer(md3dDevice.Get(), mCommandList.Get(),
+        indices, indexBufferByteSize, mIndexBufferUploader);
+
+    D3D12_INDEX_BUFFER_VIEW indexBufferView;
+    indexBufferView.BufferLocation = mIndexBufferGPU->GetGPUVirtualAddress();
+    indexBufferView.Format = DXGI_FORMAT_R16_UINT;
+    indexBufferView.SizeInBytes = indexBufferByteSize;
+
+    mCommandList->IASetIndexBuffer(&indexBufferView);
 }

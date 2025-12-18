@@ -57,6 +57,10 @@ private:
     ComPtr<ID3D12DescriptorHeap> mDsvHeap;
     ComPtr<ID3D12Resource> mSwapChainBuffer[swapChainBufferCount];
     ComPtr<ID3D12Resource> mDepthStencilBuffer;
+    ComPtr<ID3D12Resource> mVertexBufferGPU = nullptr;
+    ComPtr<ID3D12Resource> mVertexBufferUploader = nullptr;
+    ComPtr<ID3D12Resource> mIndexBufferGPU = nullptr;
+    ComPtr<ID3D12Resource> mIndexBufferUploader = nullptr;
 
     DXGI_FORMAT mBackBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
     DXGI_FORMAT mDepthStencilFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
@@ -99,6 +103,8 @@ private:
     void setDepthBufferBeingDepthBuffer();
     void setViewport();
     void setScissorRect();
+    void createVertexBuffer();
+    void createIndexBuffer();
 
     void onMouseDown(WPARAM btnState, int x, int y) {};
     void onMouseUp(WPARAM btnState, int x, int y) {};
