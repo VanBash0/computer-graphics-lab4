@@ -6,6 +6,7 @@
 #include "wrl.h"
 #include "game_timer.h"
 #include <string>
+#include <vector>
 
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -42,7 +43,7 @@ public:
 
     void flushCommandQueue();
     void calculateFrameStats();
-private:
+protected:
     static const int swapChainBufferCount = 2;
 
     ComPtr<IDXGIFactory4> mdxgiFactory;
@@ -62,6 +63,7 @@ private:
     ComPtr<ID3D12Resource> mIndexBufferGPU = nullptr;
     ComPtr<ID3D12Resource> mIndexBufferUploader = nullptr;
 
+    std::vector<D3D12_INPUT_ELEMENT_DESC> mInputLayout;
     DXGI_FORMAT mBackBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
     DXGI_FORMAT mDepthStencilFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
     D3D12_VIEWPORT mViewport{};
@@ -105,6 +107,7 @@ private:
     void setScissorRect();
     void createVertexBuffer();
     void createIndexBuffer();
+    void buildInputLayout();
 
     void onMouseDown(WPARAM btnState, int x, int y) {};
     void onMouseUp(WPARAM btnState, int x, int y) {};

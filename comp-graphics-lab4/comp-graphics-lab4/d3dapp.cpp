@@ -26,8 +26,8 @@ void D3DApp::initializeDX() {
     createIndexBuffer();
     createSwapChain();
     createDescriptorHeaps();
-
     onResize();
+    buildInputLayout();
 }
 
 void D3DApp::enableDebugLayer() {
@@ -464,4 +464,12 @@ void D3DApp::createIndexBuffer() {
     indexBufferView.SizeInBytes = indexBufferByteSize;
 
     mCommandList->IASetIndexBuffer(&indexBufferView);
+}
+
+void D3DApp::buildInputLayout() {
+    mInputLayout =
+    {
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+    };
 }

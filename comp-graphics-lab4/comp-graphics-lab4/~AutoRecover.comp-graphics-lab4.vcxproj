@@ -139,6 +139,9 @@
     <ClInclude Include="game_timer.h" />
     <ClInclude Include="vertex.h" />
   </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="shaders.hlsl" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
     <Import Project="..\packages\directxtk12_desktop_2019.2025.10.28.1\build\native\directxtk12_desktop_2019.targets" Condition="Exists('..\packages\directxtk12_desktop_2019.2025.10.28.1\build\native\directxtk12_desktop_2019.targets')" />
