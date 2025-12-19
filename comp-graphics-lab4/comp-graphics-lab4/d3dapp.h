@@ -27,7 +27,7 @@ public:
     bool initMainWindow(HINSTANCE hInstance, int nCmdShow);
     LRESULT handleMsgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
-    void onResize();
+    virtual void onResize();
 
     static D3DApp* getApp() { return mApp; }
     HWND getMainWnd() const { return mhMainWnd; }
@@ -43,6 +43,7 @@ public:
 
     void flushCommandQueue();
     void calculateFrameStats();
+
 protected:
     static const int swapChainBufferCount = 2;
 
@@ -58,12 +59,7 @@ protected:
     ComPtr<ID3D12DescriptorHeap> mDsvHeap;
     ComPtr<ID3D12Resource> mSwapChainBuffer[swapChainBufferCount];
     ComPtr<ID3D12Resource> mDepthStencilBuffer;
-    ComPtr<ID3D12Resource> mVertexBufferGPU = nullptr;
-    ComPtr<ID3D12Resource> mVertexBufferUploader = nullptr;
-    ComPtr<ID3D12Resource> mIndexBufferGPU = nullptr;
-    ComPtr<ID3D12Resource> mIndexBufferUploader = nullptr;
 
-    std::vector<D3D12_INPUT_ELEMENT_DESC> mInputLayout;
     DXGI_FORMAT mBackBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
     DXGI_FORMAT mDepthStencilFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
     D3D12_VIEWPORT mViewport{};
@@ -105,15 +101,12 @@ protected:
     void setDepthBufferBeingDepthBuffer();
     void setViewport();
     void setScissorRect();
-    void createVertexBuffer();
-    void createIndexBuffer();
-    void buildInputLayout();
 
-    void onMouseDown(WPARAM btnState, int x, int y) {};
-    void onMouseUp(WPARAM btnState, int x, int y) {};
-    void onMouseMove(WPARAM btnState, int x, int y) {};
-    void update(const GameTimer& gt) {};
-    void draw(const GameTimer& gt) {};
+    virtual void onMouseDown(WPARAM btnState, int x, int y) {};
+    virtual void onMouseUp(WPARAM btnState, int x, int y) {};
+    virtual void onMouseMove(WPARAM btnState, int x, int y) {};
+    virtual void update(const GameTimer& gt) {};
+    virtual void draw(const GameTimer& gt) {};
 };
 
 #endif // D3DAPP_H

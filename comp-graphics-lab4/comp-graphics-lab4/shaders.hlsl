@@ -15,5 +15,5 @@ void VS(float3 iPosL : POSITION,
 float4 PS(float4 posH : SV_POSITION,
 	float4 color : COLOR) : SV_Target
 {
-	return pin.Color;
+	return color;
 }
