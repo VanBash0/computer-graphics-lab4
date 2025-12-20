@@ -23,6 +23,7 @@ public:
     BoxApp(HINSTANCE hInstance) : D3DApp(hInstance) { initializeConstants(); };
 private:
     const float SPONZA_SCALE = 0.01;
+    const float SPEED_FACTOR = 10.f;
     void setSponzaSize(Vertex& vertex, float scale);
 
     void buildBuffers();
@@ -54,9 +55,13 @@ private:
     XMFLOAT4X4 mView;
     XMFLOAT4X4 mProj;
 
-    float mTheta = 1.5f * XM_PI;
-    float mPhi = XM_PIDIV4;
-    float mRadius = 5.0f;
+    DirectX::XMFLOAT3 mEyePos = { 0.0f, 2.0f, -10.0f };
+    DirectX::XMFLOAT3 mLook = { 0.0f, 0.0f, 1.0f };
+    DirectX::XMFLOAT3 mRight = { 1.0f, 0.0f, 0.0f };
+    DirectX::XMFLOAT3 mUp = { 0.0f, 1.0f, 0.0f };
+
+    float mYaw = 0.0f;
+    float mPitch = 0.0f;
 
     POINT mLastMousePos;
 

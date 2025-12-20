@@ -105,14 +105,41 @@ void BoxApp::buildConstantBuffer()
 
 void BoxApp::update(const GameTimer& gt)
 {
-    float x = mRadius * sinf(mPhi) * cosf(mTheta);
-    float z = mRadius * sinf(mPhi) * sinf(mTheta);
-    float y = mRadius * cosf(mPhi);
-    
-    XMVECTOR pos = XMVectorSet(x, y, z, 1.0f);
-    XMVECTOR target = XMVectorZero();
-    XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-    
+    float dt = gt.getDeltaTime();
+    float speed = SPEED_FACTOR * dt;
+
+    if (GetAsyncKeyState('W') & 0x8000) {
+        XMVECTOR s = XMVectorReplicate(speed);
+        XMVECTOR l = XMLoadFloat3(&mLook);
+        XMVECTOR p = XMLoadFloat3(&mEyePos);
+        XMStoreFloat3(&mEyePos, XMVectorMultiplyAdd(s, l, p));
+    }
+
+    if (GetAsyncKeyState('S') & 0x8000) {
+        XMVECTOR s = XMVectorReplicate(-speed);
+        XMVECTOR l = XMLoadFloat3(&mLook);
+        XMVECTOR p = XMLoadFloat3(&mEyePos);
+        XMStoreFloat3(&mEyePos, XMVectorMultiplyAdd(s, l, p));
+    }
+
+    if (GetAsyncKeyState('A') & 0x8000) {
+        XMVECTOR s = XMVectorReplicate(-speed);
+        XMVECTOR r = XMLoadFloat3(&mRight);
+        XMVECTOR p = XMLoadFloat3(&mEyePos);
+        XMStoreFloat3(&mEyePos, XMVectorMultiplyAdd(s, r, p));
+    }
+
+    if (GetAsyncKeyState('D') & 0x8000) {
+        XMVECTOR s = XMVectorReplicate(speed);
+        XMVECTOR r = XMLoadFloat3(&mRight);
+        XMVECTOR p = XMLoadFloat3(&mEyePos);
+        XMStoreFloat3(&mEyePos, XMVectorMultiplyAdd(s, r, p));
+    }
+
+    XMVECTOR pos = XMLoadFloat3(&mEyePos);
+    XMVECTOR target = pos + XMLoadFloat3(&mLook);
+    XMVECTOR up = XMLoadFloat3(&mUp);
+
     XMMATRIX view = XMMatrixLookAtLH(pos, target, up);
     XMStoreFloat4x4(&mView, view);
 
@@ -134,18 +161,23 @@ BoxApp::~BoxApp()
 
 void BoxApp::onMouseMove(WPARAM btnState, int x, int y) {
     if ((btnState & MK_LBUTTON) != 0) {
-        float dx = XMConvertToRadians(0.25f * static_cast<float>(x - mLastMousePos.x));
-        float dy = XMConvertToRadians(0.25f * static_cast<float>(y - mLastMousePos.y));
-        mTheta += dx;
-        mPhi += dy;
-        mPhi = std::clamp(mPhi, 0.1f, XM_PI - 0.1f);
-    }
-    else if ((btnState & MK_RBUTTON) != 0)
-    {
-        float dx = 0.005f * static_cast<float>(x - mLastMousePos.x);
-        float dy = 0.005f * static_cast<float>(y - mLastMousePos.y);
-        mRadius += dx - dy;
-        //mRadius = std::clamp(mRadius, 3.0f, 15.0f);
+        float dx = XMConvertToRadians(0.15f * static_cast<float>(x - mLastMousePos.x));
+        float dy = XMConvertToRadians(0.15f * static_cast<float>(y - mLastMousePos.y));
+
+        mYaw += dx;
+        mPitch += dy;
+
+        mPitch = std::clamp(mPitch, -XM_PIDIV2 + 0.1f, XM_PIDIV2 - 0.1f);
+        
+        XMMATRIX rotationMatrix = XMMatrixRotationRollPitchYaw(mPitch, mYaw, 0);
+
+        XMVECTOR look = XMVectorSet(0, 0, 1, 0);
+        look = XMVector3TransformNormal(look, rotationMatrix);
+        XMStoreFloat3(&mLook, look);
+
+        XMVECTOR right = XMVectorSet(1, 0, 0, 0);
+        right = XMVector3TransformNormal(right, rotationMatrix);
+        XMStoreFloat3(&mRight, right);
     }
     mLastMousePos.x = x;
     mLastMousePos.y = y;
