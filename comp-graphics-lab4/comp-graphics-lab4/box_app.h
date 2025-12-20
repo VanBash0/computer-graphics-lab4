@@ -11,7 +11,8 @@
 using namespace DirectX;
 
 struct ObjectConstants {
-    XMFLOAT4X4 WorldViewProj = {};
+    XMFLOAT4X4 WorldViewProj;
+    XMFLOAT4X4 World;
 };
 
 class BoxApp : public D3DApp {
@@ -21,6 +22,9 @@ public:
     ~BoxApp();
     BoxApp(HINSTANCE hInstance) : D3DApp(hInstance) { initializeConstants(); };
 private:
+    const float SPONZA_SCALE = 0.01;
+    void setSponzaSize(Vertex& vertex, float scale);
+
     void buildBuffers();
     void buildConstantBuffer();
     void buildCbv();

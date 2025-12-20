@@ -7,7 +7,7 @@ using namespace DirectX::SimpleMath;
 
 struct Vertex {
     Vector3 position;
-    Vector4 color;
+    Vector3 normal;
 };
 
 #endif // VERTEX_H

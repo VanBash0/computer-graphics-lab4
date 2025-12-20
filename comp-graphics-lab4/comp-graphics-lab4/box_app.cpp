@@ -2,6 +2,8 @@
 #include "fail_checker.h"
 #include <DirectXColors.h>
 #include <algorithm>
+#define TINYOBJLOADER_IMPLEMENTATION
+#include "tiny_obj_loader.h"
 
 using namespace DirectX;
 
@@ -21,36 +23,53 @@ void BoxApp::buildResources()
     flushCommandQueue();
 }
 
+void BoxApp::setSponzaSize(Vertex& vertex, float scale) {
+    vertex.position.x *= scale;
+    vertex.position.y *= scale;
+    vertex.position.z *= scale;
+}
 
 void BoxApp::buildBuffers() {
-    Vertex vertices[] =
-    {
-        { { -1.f, -1.f, -1.f }, Vector4(Colors::White) },
-        { { -1.f,  1.f, -1.f }, Vector4(Colors::Black) },
-        { {  1.f,  1.f, -1.f }, Vector4(Colors::Red) },
-        { {  1.f, -1.f, -1.f }, Vector4(Colors::Green) },
-        { { -1.f, -1.f,  1.f }, Vector4(Colors::Blue) },
-        { { -1.f,  1.f,  1.f }, Vector4(Colors::Yellow) },
-        { {  1.f,  1.f,  1.f }, Vector4(Colors::Cyan) },
-        { {  1.f, -1.f,  1.f }, Vector4(Colors::Magenta) }
-    };
+    std::vector<Vertex> vertices;
+    std::vector<std::uint32_t> indices;
 
-    std::uint16_t indices[] = {
-        0,1,2, 0,2,3,
-        4,6,5, 4,7,6,
-        4,5,1, 4,1,0,
-        3,2,6, 3,6,7,
-        1,5,6, 1,6,2,
-        4,0,3, 4,3,7
-    };
+    std::string fileName = "sponza.obj";
+    tinyobj::attrib_t tinyAtt;
+    std::vector<tinyobj::shape_t> shapes;
+    std::vector<tinyobj::material_t> materials;
+    std::string warn, err;
+    bool isSuccessfullyLoaded = tinyobj::LoadObj(&tinyAtt, &shapes, &materials, &warn, &err, fileName.c_str());
 
-    const UINT vbByteSize = sizeof(vertices);
-    const UINT ibByteSize = sizeof(indices);
+    for (const auto& shape : shapes) {
+        for (const auto& index : shape.mesh.indices) {
+            Vertex vertex;
+            vertex.position.x = tinyAtt.vertices[3 * index.vertex_index + 0];
+            vertex.position.y = tinyAtt.vertices[3 * index.vertex_index + 1];
+            vertex.position.z = tinyAtt.vertices[3 * index.vertex_index + 2];
+
+            setSponzaSize(vertex, SPONZA_SCALE);
+
+            if (index.normal_index >= 0) {
+                vertex.normal.x = tinyAtt.normals[3 * index.normal_index + 0];
+                vertex.normal.y = tinyAtt.normals[3 * index.normal_index + 1];
+                vertex.normal.z = tinyAtt.normals[3 * index.normal_index + 2];
+            }
+            else {
+                vertex.normal = { 0.f, 1.f, 0.f };
+            }
+
+            vertices.push_back(vertex);
+            indices.push_back((std::uint32_t)indices.size());
+        }
+    }
+
+    const UINT vbByteSize = vertices.size() * sizeof(Vertex);
+    const UINT ibByteSize = indices.size() * sizeof(std::uint32_t);
 
     mVertexBufferGPU = D3DUtil::createDefaultBuffer(
         md3dDevice.Get(),
         mCommandList.Get(),
-        vertices,
+        vertices.data(),
         vbByteSize,
         mVertexBufferUploader
     );
@@ -58,14 +77,14 @@ void BoxApp::buildBuffers() {
     mIndexBufferGPU = D3DUtil::createDefaultBuffer(
         md3dDevice.Get(),
         mCommandList.Get(),
-        indices,
+        indices.data(),
         ibByteSize,
         mIndexBufferUploader
     );
 
     mInputLayout = {
     { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-    { "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+    { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
     };
 
     mVertexBufferView.BufferLocation = mVertexBufferGPU->GetGPUVirtualAddress();
@@ -73,10 +92,10 @@ void BoxApp::buildBuffers() {
     mVertexBufferView.SizeInBytes = vbByteSize;
 
     mIndexBufferView.BufferLocation = mIndexBufferGPU->GetGPUVirtualAddress();
-    mIndexBufferView.Format = DXGI_FORMAT_R16_UINT;
+    mIndexBufferView.Format = DXGI_FORMAT_R32_UINT;
     mIndexBufferView.SizeInBytes = ibByteSize;
 
-    mIndexCount = _countof(indices);
+    mIndexCount = (UINT)indices.size();
 }
 
 void BoxApp::buildConstantBuffer()
@@ -103,6 +122,7 @@ void BoxApp::update(const GameTimer& gt)
 
     ObjectConstants objConstants;
     XMStoreFloat4x4(&objConstants.WorldViewProj, XMMatrixTranspose(worldViewProj));
+    XMStoreFloat4x4(&objConstants.World, XMMatrixTranspose(world));
     mObjectCB->copyData(0, objConstants);
 }
 
@@ -125,7 +145,7 @@ void BoxApp::onMouseMove(WPARAM btnState, int x, int y) {
         float dx = 0.005f * static_cast<float>(x - mLastMousePos.x);
         float dy = 0.005f * static_cast<float>(y - mLastMousePos.y);
         mRadius += dx - dy;
-        mRadius = std::clamp(mRadius, 3.0f, 15.0f);
+        //mRadius = std::clamp(mRadius, 3.0f, 15.0f);
     }
     mLastMousePos.x = x;
     mLastMousePos.y = y;

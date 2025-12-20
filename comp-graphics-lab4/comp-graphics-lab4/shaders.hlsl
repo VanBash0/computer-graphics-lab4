@@ -1,19 +1,54 @@
 cbuffer cbPerObject : register(b0)
 {
- float4x4 gWorldViewProj; 
+    float4x4 gWorldViewProj;
+    float4x4 gWorld;
 };
 
-void VS(float3 iPosL : POSITION, 
-	float4 iColor : COLOR, 
-	out float4 oPosH : SV_POSITION,
-	out float4 oColor : COLOR)
+struct VertexIn
 {
-	oPosH = mul(float4(iPosL, 1.0f), gWorldViewProj);
-	oColor = iColor;
+    float3 PosL    : POSITION;
+    float3 NormalL : NORMAL;
+};
+
+struct VertexOut
+{
+    float4 PosH    : SV_POSITION;
+    float3 PosW    : POSITION;
+    float3 NormalW : NORMAL;
+};
+
+VertexOut VS(VertexIn vin)
+{
+    VertexOut vout;
+
+    vout.PosW = mul(float4(vin.PosL, 1.0f), gWorld).xyz;
+    
+    vout.NormalW = mul(vin.NormalL, (float3x3)gWorld);
+
+    vout.PosH = mul(float4(vin.PosL, 1.0f), gWorldViewProj);
+
+    return vout;
 }
 
-float4 PS(float4 posH : SV_POSITION,
-	float4 color : COLOR) : SV_Target
+float4 PS(VertexOut pin) : SV_Target
 {
-	return color;
+    float3 normalW = normalize(pin.NormalW);
+
+    float3 lightPos = float3(5.0f, 5.0f, -5.0f);
+    float3 lightDir = normalize(lightPos - pin.PosW);
+    float3 eyePos   = float3(0.0f, 0.0f, -5.0f);
+    float3 viewDir  = normalize(eyePos - pin.PosW);
+    
+    float3 objectColor = float3(0.7f, 0.7f, 0.7f);
+
+    float3 ambient = 0.2f * objectColor;
+
+    float diff = max(dot(normalW, lightDir), 0.0f);
+    float3 diffuse = diff * objectColor;
+
+    float3 reflectDir = reflect(-lightDir, normalW);
+    float spec = pow(max(dot(viewDir, reflectDir), 0.0f), 32.0f);
+    float3 specular = spec * float3(1.0f, 1.0f, 1.0f);
+
+    return float4(ambient + diffuse + specular, 1.0f);
 }

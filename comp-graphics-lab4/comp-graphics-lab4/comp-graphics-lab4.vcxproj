@@ -142,6 +142,7 @@
     <ClInclude Include="d3dutil.h" />
     <ClInclude Include="fail_checker.h" />
     <ClInclude Include="game_timer.h" />
+    <ClInclude Include="tiny_obj_loader.h" />
     <ClInclude Include="upload_buffer.h" />
     <ClInclude Include="vertex.h" />
   </ItemGroup>
