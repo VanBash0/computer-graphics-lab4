@@ -18,7 +18,6 @@ void BoxApp::buildResources() {
     buildConstantBuffer();
     buildCbv();
     buildPso();
-    createTextureResources(mMeshes, "sponza.obj");
 
     failCheck(mCommandList->Close());
     ID3D12CommandList* cmds[] = { mCommandList.Get() };
@@ -32,9 +31,11 @@ void BoxApp::setObjectSize(Vertex& vertex, float scale) {
     vertex.position.z *= scale;
 }
 
-void BoxApp::buildBuffers() {
+void BoxApp::buildBuffers()
+{
     ModelLoader loader(SCENE_SCALE);
     mMeshes = loader.loadModel("sponza.obj");
+
     createTextureResources(mMeshes, "sponza.obj");
 
     size_t totalVertices = 0;
@@ -44,34 +45,29 @@ void BoxApp::buildBuffers() {
         totalIndices += mesh.indices.size();
     }
 
-    std::vector<Vertex> allVertices;
-    allVertices.reserve(totalVertices);
-    std::vector<uint32_t> allIndices;
-    allIndices.reserve(totalIndices);
+    std::vector<Vertex> allVertices(totalVertices);
+    std::vector<uint32_t> allIndices(totalIndices);
 
-    uint32_t indexOffset = 0;
-    for (const auto& mesh : mMeshes) {
-        allVertices.insert(allVertices.end(), mesh.vertices.begin(), mesh.vertices.end());
+    size_t vertexOffset = 0;
+    size_t indexOffset = 0;
 
-        for (auto idx : mesh.indices) {
-            allIndices.push_back(idx + indexOffset);
+    for (auto& mesh : mMeshes) {
+        std::memcpy(allVertices.data() + vertexOffset, mesh.vertices.data(), mesh.vertices.size() * sizeof(Vertex));
+
+        for (size_t j = 0; j < mesh.indices.size(); ++j) {
+            allIndices[indexOffset + j] = mesh.indices[j] + static_cast<uint32_t>(vertexOffset);
         }
-        indexOffset += static_cast<uint32_t>(mesh.vertices.size());
+
+        mesh.baseVertex = static_cast<UINT>(vertexOffset);
+        mesh.startIndex = static_cast<UINT>(indexOffset);
+        mesh.indexCount = static_cast<UINT>(mesh.indices.size());
+
+        vertexOffset += mesh.vertices.size();
+        indexOffset += mesh.indices.size();
     }
 
     const UINT vbByteSize = static_cast<UINT>(allVertices.size() * sizeof(Vertex));
     const UINT ibByteSize = static_cast<UINT>(allIndices.size() * sizeof(uint32_t));
-
-    indexOffset = 0;
-    uint32_t vertexOffset = 0;
-    for (auto& mesh : mMeshes) {
-        mesh.startIndex = indexOffset;
-        mesh.baseVertex = vertexOffset;
-        mesh.indexCount = static_cast<UINT>(mesh.indices.size());
-
-        indexOffset += static_cast<UINT>(mesh.indices.size());
-        vertexOffset += static_cast<UINT>(mesh.vertices.size());
-    }
 
     mVertexBufferGPU = D3DUtil::createDefaultBuffer(md3dDevice.Get(), mCommandList.Get(),
         allVertices.data(), vbByteSize, mVertexBufferUploader);
@@ -81,8 +77,8 @@ void BoxApp::buildBuffers() {
 
     mInputLayout = {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
     };
 
     mVertexBufferView.BufferLocation = mVertexBufferGPU->GetGPUVirtualAddress();
@@ -244,29 +240,28 @@ void BoxApp::draw(const GameTimer& gt)
     {
         const MeshData& mesh = mMeshes[i];
 
-        mCommandList->SetGraphicsRoot32BitConstants(
-            0,
-            4,
-            &mesh.material.diffuseColor,
-            0
-        );
+        mCommandList->SetGraphicsRoot32BitConstants(0, 4, &mesh.material.diffuseColor, 0);
 
+        // 1: SRV table (texture) — если mesh.material.srvIndex >= 0
         CD3DX12_GPU_DESCRIPTOR_HANDLE srvHandle(mSrvHeap->GetGPUDescriptorHandleForHeapStart());
         if (mesh.material.srvIndex >= 0)
             srvHandle.Offset(mesh.material.srvIndex, mCbvSrvDescriptorSize);
-
         mCommandList->SetGraphicsRootDescriptorTable(1, srvHandle);
+
+        // 2: CBV table (object constants). Если вы сделали CBV-heap в buildCbv():
+        CD3DX12_GPU_DESCRIPTOR_HANDLE cbvHandle(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
+        mCommandList->SetGraphicsRootDescriptorTable(2, cbvHandle);
 
         mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         mCommandList->IASetVertexBuffers(0, 1, &mVertexBufferView);
         mCommandList->IASetIndexBuffer(&mIndexBufferView);
 
         mCommandList->DrawIndexedInstanced(
-            static_cast<UINT>(mesh.indices.size()),
-            1,           
-            0,       
-            0,       
-            0    
+            mesh.indexCount,       // number of indices to draw for this mesh
+            1,                     // instance count
+            mesh.startIndex,       // start index location in the *global* index buffer
+            mesh.baseVertex,       // base vertex location (vertex offset)
+            0
         );
     }
 
@@ -288,27 +283,33 @@ void BoxApp::draw(const GameTimer& gt)
 }
 
 void BoxApp::buildRootSignature() {
-    CD3DX12_ROOT_PARAMETER slotRootParameter[1];
-    CD3DX12_DESCRIPTOR_RANGE cbvTable;
-    cbvTable.Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0);
-    slotRootParameter[0].InitAsDescriptorTable(1, &cbvTable);
+    CD3DX12_ROOT_PARAMETER slotRootParameter[3];
 
-    CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(1, slotRootParameter, 0, nullptr,
+    // root constants (4 x uint32 -> maps to float4)
+    slotRootParameter[0].InitAsConstants(4, 0); // 4 32-bit values in shader register b0 (or use register space)
+
+    // SRV range (t0)
+    CD3DX12_DESCRIPTOR_RANGE srvRange;
+    srvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+    slotRootParameter[1].InitAsDescriptorTable(1, &srvRange);
+
+    // CBV range (b0)
+    CD3DX12_DESCRIPTOR_RANGE cbvRange;
+    cbvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0);
+    slotRootParameter[2].InitAsDescriptorTable(1, &cbvRange);
+
+    CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(3, slotRootParameter, 0, nullptr,
         D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
     ComPtr<ID3DBlob> serializedRootSig;
     ComPtr<ID3DBlob> errorBlob;
-    D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1,
-        serializedRootSig.GetAddressOf(),
-        errorBlob.GetAddressOf());
+    failCheck(D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1,
+        serializedRootSig.GetAddressOf(), errorBlob.GetAddressOf()));
 
-    md3dDevice->CreateRootSignature(
-        0,
+    failCheck(md3dDevice->CreateRootSignature(0,
         serializedRootSig->GetBufferPointer(),
         serializedRootSig->GetBufferSize(),
-        IID_PPV_ARGS(&mRootSignature)
-    );
-
+        IID_PPV_ARGS(&mRootSignature)));
 }
 
 void BoxApp::buildPso()

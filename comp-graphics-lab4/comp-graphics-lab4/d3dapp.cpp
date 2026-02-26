@@ -170,10 +170,19 @@ void D3DApp::createDepthStencilBufferView() {
 void D3DApp::setDepthBufferBeingDepthBuffer() {
     md3dDevice->CreateDepthStencilView(mDepthStencilBuffer.Get(), nullptr, getDepthStencilView());
 
+    failCheck(mDirectCmdListAlloc->Reset());
+    failCheck(mCommandList->Reset(mDirectCmdListAlloc.Get(), nullptr));
+
     auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(mDepthStencilBuffer.Get(),
         D3D12_RESOURCE_STATE_COMMON,
         D3D12_RESOURCE_STATE_DEPTH_WRITE);
     mCommandList->ResourceBarrier(1, &barrier);
+
+    failCheck(mCommandList->Close());
+    ID3D12CommandList* cmds[] = { mCommandList.Get() };
+    mCommandQueue->ExecuteCommandLists(1, cmds);
+
+    flushCommandQueue();
 }
 
 void D3DApp::setViewport() {
@@ -183,7 +192,7 @@ void D3DApp::setViewport() {
     mViewport.Height = static_cast<float>(mClientHeight);
     mViewport.MinDepth = 0.0f;
     mViewport.MaxDepth = 1.0f;
-    mCommandList->RSSetViewports(1, &mViewport);
+    //mCommandList->RSSetViewports(1, &mViewport);
 }
 
 void D3DApp::setScissorRect() {
@@ -191,7 +200,7 @@ void D3DApp::setScissorRect() {
     mScissorRect.top = 0;
     mScissorRect.right = mClientWidth;
     mScissorRect.bottom = mClientHeight;
-    mCommandList->RSSetScissorRects(1, &mScissorRect);
+    //mCommandList->RSSetScissorRects(1, &mScissorRect);
 }
 
 D3DApp::D3DApp(HINSTANCE hInstance) {
@@ -338,23 +347,34 @@ void D3DApp::onResize() {
     assert(md3dDevice);
     assert(mSwapChain);
 
+    // Ждём завершения GPU
     flushCommandQueue();
 
+    // Сбрасываем старые ресурсы
     for (int i = 0; i < swapChainBufferCount; ++i)
         mSwapChainBuffer[i].Reset();
-
     mDepthStencilBuffer.Reset();
 
-    DXGI_SWAP_CHAIN_DESC swapChainDesc;
+    // Получаем параметры swap chain
+    DXGI_SWAP_CHAIN_DESC swapChainDesc = {};
     mSwapChain->GetDesc(&swapChainDesc);
 
-    failCheck(mSwapChain->ResizeBuffers(swapChainBufferCount, mClientWidth,
-        mClientHeight, swapChainDesc.BufferDesc.Format, swapChainDesc.Flags));
+    // Resize, пока GPU idle
+    HRESULT hr = mSwapChain->ResizeBuffers(
+        swapChainBufferCount,
+        mClientWidth,
+        mClientHeight,
+        swapChainDesc.BufferDesc.Format,
+        swapChainDesc.Flags
+    );
 
     mCurrBackBuffer = 0;
 
+    // Создаём новые RTV и DSV
     createRenderTargetViews();
     createDepthStencilBufferView();
+
+    // Обновляем viewport и scissor
     setViewport();
     setScissorRect();
 }
@@ -412,96 +432,106 @@ void D3DApp::calculateFrameStats() {
     }
 }
 
-void D3DApp::createTextureResources(const std::vector<MeshData>& meshes, const std::string& modelFilePath) {
+void D3DApp::createTextureResources(const std::vector<MeshData>& meshes, const std::string& modelFilePath)
+{
     std::unordered_map<std::string, UINT> pathToIndexMap;
     std::vector<std::string> uniquePaths;
-    std::filesystem::path modelDirectory = std::filesystem::path(modelFilePath).parent_path();
+    std::filesystem::path modelDir = std::filesystem::path(modelFilePath).parent_path();
+
+    // Собираем уникальные пути текстур
     for (auto& mesh : meshes) {
-        if (mesh.material.diffuseTexturePath.empty()) continue;
+        if (mesh.material.diffuseTexturePath.empty())
+            continue;
 
-        std::filesystem::path variant = mesh.material.diffuseTexturePath;
-        if (variant.is_relative()) variant = modelDirectory / variant;
-        std::string path = variant.lexically_normal().string();
+        std::filesystem::path texPath = mesh.material.diffuseTexturePath;
+        if (texPath.is_relative())
+            texPath = modelDir / texPath;
 
-        if (pathToIndexMap.find(path) == pathToIndexMap.end()) {
-            pathToIndexMap[path] = static_cast<UINT>(uniquePaths.size());
-            uniquePaths.push_back(path);
+        std::string fullPath = texPath.lexically_normal().string();
+
+        if (pathToIndexMap.find(fullPath) == pathToIndexMap.end()) {
+            pathToIndexMap[fullPath] = static_cast<UINT>(uniquePaths.size());
+            uniquePaths.push_back(fullPath);
         }
-        const_cast<MeshData&>(mesh).material.srvIndex = pathToIndexMap[path];
 
-        if (uniquePaths.empty()) return;
+        const_cast<MeshData&>(mesh).material.srvIndex = pathToIndexMap[fullPath];
+    }
 
-        D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
-        srvHeapDesc.NumDescriptors = static_cast<UINT>(uniquePaths.size());
-        srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-        srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-        failCheck(md3dDevice->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&mSrvHeap)));
+    if (uniquePaths.empty())
+        return;
 
-        mCbvSrvDescriptorSize = md3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-        mTextureResources.resize(uniquePaths.size());
+    // Создаём один раз SRV heap для всех текстур
+    D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
+    srvHeapDesc.NumDescriptors = static_cast<UINT>(uniquePaths.size());
+    srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    failCheck(md3dDevice->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&mSrvHeap)));
 
-        for (size_t i = 0; i < uniquePaths.size(); ++i) {
-            std::wstring wpath = std::filesystem::path(uniquePaths[i]).wstring();
+    mCbvSrvDescriptorSize = md3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    mTextureResources.resize(uniquePaths.size());
 
-            TexMetadata metadata;
-            ScratchImage scratchImg;
-            failCheck(LoadFromWICFile(wpath.c_str(), WIC_FLAGS_NONE, &metadata, scratchImg));
+    // Загружаем текстуры в GPU
+    for (size_t i = 0; i < uniquePaths.size(); ++i) {
+        std::wstring wpath = std::filesystem::path(uniquePaths[i]).wstring();
 
-            const Image* img = scratchImg.GetImage(0, 0, 0);
+        TexMetadata metadata;
+        ScratchImage scratchImg;
+        failCheck(LoadFromWICFile(wpath.c_str(), WIC_FLAGS_NONE, &metadata, scratchImg));
 
-            CD3DX12_RESOURCE_DESC texDesc =
-                CD3DX12_RESOURCE_DESC::Tex2D(metadata.format, metadata.width,
-                    static_cast<UINT>(metadata.height),
-                    static_cast<UINT16>(metadata.arraySize),
-                    static_cast<UINT16>(metadata.mipLevels));
+        const Image* img = scratchImg.GetImage(0, 0, 0);
 
-            auto heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-            failCheck(md3dDevice->CreateCommittedResource(
-                &heapProps,
-                D3D12_HEAP_FLAG_NONE,
-                &texDesc,
-                D3D12_RESOURCE_STATE_COPY_DEST,
-                nullptr,
-                IID_PPV_ARGS(&mTextureResources[i])
-            ));
+        CD3DX12_RESOURCE_DESC texDesc =
+            CD3DX12_RESOURCE_DESC::Tex2D(metadata.format, metadata.width,
+                                         static_cast<UINT>(metadata.height),
+                                         static_cast<UINT16>(metadata.arraySize),
+                                         static_cast<UINT16>(metadata.mipLevels));
 
-            UINT64 uploadBufferSize = GetRequiredIntermediateSize(mTextureResources[i].Get(), 0, 1);
-            ComPtr<ID3D12Resource> uploadHeap;
+        ComPtr<ID3D12Resource> uploadHeap;
 
-            heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-            auto buffer = CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize);
-            failCheck(md3dDevice->CreateCommittedResource(
-                &heapProps,
-                D3D12_HEAP_FLAG_NONE,
-                &buffer,
-                D3D12_RESOURCE_STATE_GENERIC_READ,
-                nullptr,
-                IID_PPV_ARGS(&uploadHeap)
-            ));
+        auto heapPropsDefault = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+        failCheck(md3dDevice->CreateCommittedResource(
+            &heapPropsDefault,
+            D3D12_HEAP_FLAG_NONE,
+            &texDesc,
+            D3D12_RESOURCE_STATE_COPY_DEST,
+            nullptr,
+            IID_PPV_ARGS(&mTextureResources[i])));
 
-            D3D12_SUBRESOURCE_DATA textureData = {};
-            textureData.pData = img->pixels;
-            textureData.RowPitch = img->rowPitch;
-            textureData.SlicePitch = img->slicePitch;
+        // Создаём upload heap
+        UINT64 uploadBufferSize = GetRequiredIntermediateSize(mTextureResources[i].Get(), 0, 1);
+        auto heapPropsUpload = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+        auto bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize);
+        failCheck(md3dDevice->CreateCommittedResource(
+            &heapPropsUpload,
+            D3D12_HEAP_FLAG_NONE,
+            &bufferDesc,
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            nullptr,
+            IID_PPV_ARGS(&uploadHeap)));
 
-            UpdateSubresources(mCommandList.Get(), mTextureResources[i].Get(), uploadHeap.Get(), 0, 0, 1, &textureData);
+        D3D12_SUBRESOURCE_DATA subresource = {};
+        subresource.pData = img->pixels;
+        subresource.RowPitch = img->rowPitch;
+        subresource.SlicePitch = img->slicePitch;
 
-            auto transition = CD3DX12_RESOURCE_BARRIER::Transition(
-                mTextureResources[i].Get(),
-                D3D12_RESOURCE_STATE_COPY_DEST,
-                D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-            mCommandList->ResourceBarrier(1, &transition);
+        UpdateSubresources(mCommandList.Get(), mTextureResources[i].Get(), uploadHeap.Get(), 0, 0, 1, &subresource);
 
-            D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-            srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-            srvDesc.Format = mTextureResources[i]->GetDesc().Format;
-            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-            srvDesc.Texture2D.MostDetailedMip = 0;
-            srvDesc.Texture2D.MipLevels = mTextureResources[i]->GetDesc().MipLevels;
-            srvDesc.Texture2D.ResourceMinLODClamp = 0.f;
+        auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            mTextureResources[i].Get(),
+            D3D12_RESOURCE_STATE_COPY_DEST,
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        mCommandList->ResourceBarrier(1, &barrier);
 
-            CD3DX12_CPU_DESCRIPTOR_HANDLE handle(mSrvHeap->GetCPUDescriptorHandleForHeapStart(), static_cast<INT>(i), mCbvSrvDescriptorSize);
-            md3dDevice->CreateShaderResourceView(mTextureResources[i].Get(), &srvDesc, handle);
-        }
+        // SRV
+        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+        srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srvDesc.Format = mTextureResources[i]->GetDesc().Format;
+        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        srvDesc.Texture2D.MostDetailedMip = 0;
+        srvDesc.Texture2D.MipLevels = mTextureResources[i]->GetDesc().MipLevels;
+        srvDesc.Texture2D.ResourceMinLODClamp = 0.f;
+
+        CD3DX12_CPU_DESCRIPTOR_HANDLE handle(mSrvHeap->GetCPUDescriptorHandleForHeapStart(), static_cast<INT>(i), mCbvSrvDescriptorSize);
+        md3dDevice->CreateShaderResourceView(mTextureResources[i].Get(), &srvDesc, handle);
     }
 }
