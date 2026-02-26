@@ -40,7 +40,6 @@ private:
     ComPtr<ID3D12Resource> mVertexBufferGPU;
     ComPtr<ID3D12Resource> mVertexBufferUploader;
 
-
     ComPtr<ID3D12Resource> mIndexBufferGPU;
     ComPtr<ID3D12Resource> mIndexBufferUploader;
 
@@ -69,6 +68,8 @@ private:
 
     D3D12_VERTEX_BUFFER_VIEW mVertexBufferView;
     D3D12_INDEX_BUFFER_VIEW mIndexBufferView;
+
+    std::vector<MeshData> mMeshes;
 };
 
 #endif // BOX_APP_H

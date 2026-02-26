@@ -18,6 +18,7 @@ void BoxApp::buildResources() {
     buildConstantBuffer();
     buildCbv();
     buildPso();
+    createTextureResources(mMeshes, "sponza.obj");
 
     failCheck(mCommandList->Close());
     ID3D12CommandList* cmds[] = { mCommandList.Get() };
@@ -33,20 +34,55 @@ void BoxApp::setObjectSize(Vertex& vertex, float scale) {
 
 void BoxApp::buildBuffers() {
     ModelLoader loader(SCENE_SCALE);
-    MeshData mesh = loader.loadModel("sponza.obj");
+    mMeshes = loader.loadModel("sponza.obj");
+    createTextureResources(mMeshes, "sponza.obj");
 
-    const UINT vbByteSize = static_cast<UINT>(mesh.vertices.size() * sizeof(Vertex));
-    const UINT ibByteSize = static_cast<UINT>(mesh.indices.size() * sizeof(uint32_t));
+    size_t totalVertices = 0;
+    size_t totalIndices = 0;
+    for (const auto& mesh : mMeshes) {
+        totalVertices += mesh.vertices.size();
+        totalIndices += mesh.indices.size();
+    }
+
+    std::vector<Vertex> allVertices;
+    allVertices.reserve(totalVertices);
+    std::vector<uint32_t> allIndices;
+    allIndices.reserve(totalIndices);
+
+    uint32_t indexOffset = 0;
+    for (const auto& mesh : mMeshes) {
+        allVertices.insert(allVertices.end(), mesh.vertices.begin(), mesh.vertices.end());
+
+        for (auto idx : mesh.indices) {
+            allIndices.push_back(idx + indexOffset);
+        }
+        indexOffset += static_cast<uint32_t>(mesh.vertices.size());
+    }
+
+    const UINT vbByteSize = static_cast<UINT>(allVertices.size() * sizeof(Vertex));
+    const UINT ibByteSize = static_cast<UINT>(allIndices.size() * sizeof(uint32_t));
+
+    indexOffset = 0;
+    uint32_t vertexOffset = 0;
+    for (auto& mesh : mMeshes) {
+        mesh.startIndex = indexOffset;
+        mesh.baseVertex = vertexOffset;
+        mesh.indexCount = static_cast<UINT>(mesh.indices.size());
+
+        indexOffset += static_cast<UINT>(mesh.indices.size());
+        vertexOffset += static_cast<UINT>(mesh.vertices.size());
+    }
 
     mVertexBufferGPU = D3DUtil::createDefaultBuffer(md3dDevice.Get(), mCommandList.Get(),
-        mesh.vertices.data(), vbByteSize, mVertexBufferUploader);
+        allVertices.data(), vbByteSize, mVertexBufferUploader);
 
     mIndexBufferGPU = D3DUtil::createDefaultBuffer(md3dDevice.Get(), mCommandList.Get(),
-        mesh.indices.data(), ibByteSize, mIndexBufferUploader);
+        allIndices.data(), ibByteSize, mIndexBufferUploader);
 
     mInputLayout = {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+        { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
     };
 
     mVertexBufferView.BufferLocation = mVertexBufferGPU->GetGPUVirtualAddress();
@@ -57,7 +93,7 @@ void BoxApp::buildBuffers() {
     mIndexBufferView.Format = DXGI_FORMAT_R32_UINT;
     mIndexBufferView.SizeInBytes = ibByteSize;
 
-    mIndexCount = static_cast<UINT>(mesh.indices.size());
+    mIndexCount = static_cast<UINT>(allIndices.size());
 }
 
 void BoxApp::buildConstantBuffer()
@@ -191,26 +227,48 @@ void BoxApp::draw(const GameTimer& gt)
     mCommandList->ResourceBarrier(1, &barrier);
 
     CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(getCurrentBackBuffer());
-
     const float clearColor[4] = { 0.2f, 0.2f, 0.3f, 1.0f };
     mCommandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
-    mCommandList->ClearDepthStencilView(getDepthStencilView(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
+    mCommandList->ClearDepthStencilView(getDepthStencilView(),
+        D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
 
     auto depthStencilView = getDepthStencilView();
     mCommandList->OMSetRenderTargets(1, &rtvHandle, TRUE, &depthStencilView);
 
     mCommandList->SetGraphicsRootSignature(mRootSignature.Get());
-    ID3D12DescriptorHeap* heaps[] = { mCbvHeap.Get() };
+
+    ID3D12DescriptorHeap* heaps[] = { mCbvHeap.Get(), mSrvHeap.Get() };
     mCommandList->SetDescriptorHeaps(_countof(heaps), heaps);
 
-    CD3DX12_GPU_DESCRIPTOR_HANDLE cbvHandle(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
-    mCommandList->SetGraphicsRootDescriptorTable(0, cbvHandle);
+    for (size_t i = 0; i < mMeshes.size(); ++i)
+    {
+        const MeshData& mesh = mMeshes[i];
 
-    mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    mCommandList->IASetVertexBuffers(0, 1, &mVertexBufferView);
-    mCommandList->IASetIndexBuffer(&mIndexBufferView);
+        mCommandList->SetGraphicsRoot32BitConstants(
+            0,
+            4,
+            &mesh.material.diffuseColor,
+            0
+        );
 
-    mCommandList->DrawIndexedInstanced(mIndexCount, 1, 0, 0, 0);
+        CD3DX12_GPU_DESCRIPTOR_HANDLE srvHandle(mSrvHeap->GetGPUDescriptorHandleForHeapStart());
+        if (mesh.material.srvIndex >= 0)
+            srvHandle.Offset(mesh.material.srvIndex, mCbvSrvDescriptorSize);
+
+        mCommandList->SetGraphicsRootDescriptorTable(1, srvHandle);
+
+        mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        mCommandList->IASetVertexBuffers(0, 1, &mVertexBufferView);
+        mCommandList->IASetIndexBuffer(&mIndexBufferView);
+
+        mCommandList->DrawIndexedInstanced(
+            static_cast<UINT>(mesh.indices.size()),
+            1,           
+            0,       
+            0,       
+            0    
+        );
+    }
 
     barrier = CD3DX12_RESOURCE_BARRIER::Transition(
         getCurrentBackBufferResource(),
