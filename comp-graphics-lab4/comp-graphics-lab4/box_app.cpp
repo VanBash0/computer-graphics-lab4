@@ -1,14 +1,16 @@
 ﻿#include "box_app.h"
 #include "fail_checker.h"
+#include "model_loader.h"
+
+#include <assimp/Importer.hpp>
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
+
 #include <DirectXColors.h>
 #include <algorithm>
-#define TINYOBJLOADER_IMPLEMENTATION
-#include "tiny_obj_loader.h"
+#include <unordered_map>
 
-using namespace DirectX;
-
-void BoxApp::buildResources()
-{
+void BoxApp::buildResources() {
     initializeConstants();
     failCheck(mCommandList->Reset(mDirectCmdListAlloc.Get(), nullptr));
     buildBuffers();
@@ -23,68 +25,28 @@ void BoxApp::buildResources()
     flushCommandQueue();
 }
 
-void BoxApp::setSponzaSize(Vertex& vertex, float scale) {
+void BoxApp::setObjectSize(Vertex& vertex, float scale) {
     vertex.position.x *= scale;
     vertex.position.y *= scale;
     vertex.position.z *= scale;
 }
 
 void BoxApp::buildBuffers() {
-    std::vector<Vertex> vertices;
-    std::vector<std::uint32_t> indices;
+    ModelLoader loader(SCENE_SCALE);
+    MeshData mesh = loader.loadModel("sponza.obj");
 
-    std::string fileName = "sponza.obj";
-    tinyobj::attrib_t tinyAtt;
-    std::vector<tinyobj::shape_t> shapes;
-    std::vector<tinyobj::material_t> materials;
-    std::string warn, err;
-    bool isSuccessfullyLoaded = tinyobj::LoadObj(&tinyAtt, &shapes, &materials, &warn, &err, fileName.c_str());
+    const UINT vbByteSize = static_cast<UINT>(mesh.vertices.size() * sizeof(Vertex));
+    const UINT ibByteSize = static_cast<UINT>(mesh.indices.size() * sizeof(uint32_t));
 
-    for (const auto& shape : shapes) {
-        for (const auto& index : shape.mesh.indices) {
-            Vertex vertex;
-            vertex.position.x = tinyAtt.vertices[3 * index.vertex_index + 0];
-            vertex.position.y = tinyAtt.vertices[3 * index.vertex_index + 1];
-            vertex.position.z = tinyAtt.vertices[3 * index.vertex_index + 2];
+    mVertexBufferGPU = D3DUtil::createDefaultBuffer(md3dDevice.Get(), mCommandList.Get(),
+        mesh.vertices.data(), vbByteSize, mVertexBufferUploader);
 
-            setSponzaSize(vertex, SPONZA_SCALE);
-
-            if (index.normal_index >= 0) {
-                vertex.normal.x = tinyAtt.normals[3 * index.normal_index + 0];
-                vertex.normal.y = tinyAtt.normals[3 * index.normal_index + 1];
-                vertex.normal.z = tinyAtt.normals[3 * index.normal_index + 2];
-            }
-            else {
-                vertex.normal = { 0.f, 1.f, 0.f };
-            }
-
-            vertices.push_back(vertex);
-            indices.push_back((std::uint32_t)indices.size());
-        }
-    }
-
-    const UINT vbByteSize = vertices.size() * sizeof(Vertex);
-    const UINT ibByteSize = indices.size() * sizeof(std::uint32_t);
-
-    mVertexBufferGPU = D3DUtil::createDefaultBuffer(
-        md3dDevice.Get(),
-        mCommandList.Get(),
-        vertices.data(),
-        vbByteSize,
-        mVertexBufferUploader
-    );
-
-    mIndexBufferGPU = D3DUtil::createDefaultBuffer(
-        md3dDevice.Get(),
-        mCommandList.Get(),
-        indices.data(),
-        ibByteSize,
-        mIndexBufferUploader
-    );
+    mIndexBufferGPU = D3DUtil::createDefaultBuffer(md3dDevice.Get(), mCommandList.Get(),
+        mesh.indices.data(), ibByteSize, mIndexBufferUploader);
 
     mInputLayout = {
-    { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-    { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
     };
 
     mVertexBufferView.BufferLocation = mVertexBufferGPU->GetGPUVirtualAddress();
@@ -95,7 +57,7 @@ void BoxApp::buildBuffers() {
     mIndexBufferView.Format = DXGI_FORMAT_R32_UINT;
     mIndexBufferView.SizeInBytes = ibByteSize;
 
-    mIndexCount = (UINT)indices.size();
+    mIndexCount = static_cast<UINT>(mesh.indices.size());
 }
 
 void BoxApp::buildConstantBuffer()
@@ -202,7 +164,6 @@ void BoxApp::buildCbv()
     D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc;
     cbvDesc.BufferLocation = mObjectCB->getResource()->GetGPUVirtualAddress();
     cbvDesc.SizeInBytes = objCBByteSize;
-    md3dDevice->CreateConstantBufferView(&cbvDesc, mCbvHeap->GetCPUDescriptorHandleForHeapStart());
 
     cbvDesc = {};
     cbvDesc.BufferLocation = mObjectCB->getResource()->GetGPUVirtualAddress();

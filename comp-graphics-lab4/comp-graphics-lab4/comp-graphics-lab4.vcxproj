@@ -104,12 +104,15 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions);DEBUG</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>C:\Users\user\Documents\computer-graphics-lab4\comp-graphics-lab4\libs\include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EntryPointSymbol>
       </EntryPointSymbol>
+      <AdditionalLibraryDirectories>C:\Users\user\Documents\computer-graphics-lab4\comp-graphics-lab4\libs\lib</AdditionalLibraryDirectories>
+      <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies);assimp-vc143-mt.lib</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -132,6 +135,7 @@
     <ClCompile Include="d3dutil.cpp" />
     <ClCompile Include="game_timer.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="model_loader.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -142,7 +146,7 @@
     <ClInclude Include="d3dutil.h" />
     <ClInclude Include="fail_checker.h" />
     <ClInclude Include="game_timer.h" />
-    <ClInclude Include="tiny_obj_loader.h" />
+    <ClInclude Include="model_loader.h" />
     <ClInclude Include="upload_buffer.h" />
     <ClInclude Include="vertex.h" />
   </ItemGroup>

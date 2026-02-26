@@ -22,9 +22,9 @@ public:
     ~BoxApp();
     BoxApp(HINSTANCE hInstance) : D3DApp(hInstance) { initializeConstants(); };
 private:
-    const float SPONZA_SCALE = 0.01;
+    const float SCENE_SCALE = 0.01f;
     const float SPEED_FACTOR = 10.f;
-    void setSponzaSize(Vertex& vertex, float scale);
+    void setObjectSize(Vertex& vertex, float scale);
 
     void buildBuffers();
     void buildConstantBuffer();
