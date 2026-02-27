@@ -16,7 +16,7 @@ static XMMATRIX aiToXM(const aiMatrix4x4& m) {
     );
 }
 
-void ModelLoader::parseMesh(const aiMesh* mesh, const aiMatrix4x4& transform, MeshData& meshData) {
+void ModelLoader::parseMesh(const aiMesh* mesh, const aiMatrix4x4& transform, MeshData& meshData, const aiScene* scene) {
     UINT baseVertex = static_cast<UINT>(meshData.vertices.size());
     UINT startIndex = static_cast<UINT>(meshData.indices.size());
 
@@ -60,6 +60,25 @@ void ModelLoader::parseMesh(const aiMesh* mesh, const aiMatrix4x4& transform, Me
     submesh.indexCount = static_cast<UINT>(mesh->mNumFaces * 3);
     submesh.startIndiceIndex = startIndex;
     submesh.startVerticeIndex = baseVertex;
+
+    if (scene && mesh->mMaterialIndex <= -1) {
+        aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
+        aiColor4D color;
+        if (material->Get(AI_MATKEY_COLOR_DIFFUSE, color) == AI_SUCCESS) {
+            submesh.material.diffuseColor = { color.r, color.g, color.b, color.a };
+        }
+        if (material->Get(AI_MATKEY_COLOR_AMBIENT, color) == AI_SUCCESS) {
+            submesh.material.ambientColor = { color.r, color.g, color.b, color.a };
+        }
+        if (material->Get(AI_MATKEY_COLOR_SPECULAR, color) == AI_SUCCESS) {
+            submesh.material.specularColor = { color.r, color.g, color.b, color.a };
+        }
+        float shininess = 0.f;
+        if (material->Get(AI_MATKEY_SHININESS, shininess) == AI_SUCCESS) {
+            submesh.material.shininess = shininess;
+        }
+    }
+
     meshData.submeshes.push_back(submesh);
 }
 
@@ -68,7 +87,7 @@ void ModelLoader::parseNode(const aiNode* node, const aiScene* scene, const aiMa
 
     for (UINT i = 0; i < node->mNumMeshes; ++i) {
         const aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-        parseMesh(mesh, globalTransform, meshData);
+        parseMesh(mesh, globalTransform, meshData, scene);
     }
 
     for (UINT i = 0; i < node->mNumChildren; ++i) {

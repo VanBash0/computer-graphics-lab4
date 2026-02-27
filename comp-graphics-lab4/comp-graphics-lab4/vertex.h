@@ -8,6 +8,7 @@ using namespace DirectX::SimpleMath;
 struct Vertex {
     Vector3 position;
     Vector3 normal;
+    Vector2 texCoord;
 };
 
 #endif // VERTEX_H

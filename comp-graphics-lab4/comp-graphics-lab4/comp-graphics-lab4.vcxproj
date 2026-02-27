@@ -146,6 +146,7 @@
     <ClInclude Include="d3dutil.h" />
     <ClInclude Include="fail_checker.h" />
     <ClInclude Include="game_timer.h" />
+    <ClInclude Include="mesh_data.h" />
     <ClInclude Include="model_loader.h" />
     <ClInclude Include="upload_buffer.h" />
     <ClInclude Include="vertex.h" />
