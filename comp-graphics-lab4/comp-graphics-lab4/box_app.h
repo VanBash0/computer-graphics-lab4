@@ -4,9 +4,13 @@
 #include "d3dapp.h"
 #include "d3dutil.h"
 #include "vertex.h"
-#include <DirectXColors.h>
 #include "upload_buffer.h"
+#include "model_loader.h"
+#include "texture.h"
+
+#include <DirectXColors.h>
 #include <DirectXMath.h>
+#include <memory>
 
 using namespace DirectX;
 
@@ -28,10 +32,12 @@ private:
 
     void buildBuffers();
     void buildConstantBuffer();
-    void buildCbv();
     void buildRootSignature();
     void buildPso();
     void initializeConstants();
+    void loadTextures();
+    void buildCbvSrvHeap();
+    void bindMaterialsToTextures();
 
     void update(const GameTimer& gt) override;
     void draw(const GameTimer& gt) override;
@@ -40,13 +46,16 @@ private:
     ComPtr<ID3D12Resource> mVertexBufferGPU;
     ComPtr<ID3D12Resource> mVertexBufferUploader;
 
+
     ComPtr<ID3D12Resource> mIndexBufferGPU;
     ComPtr<ID3D12Resource> mIndexBufferUploader;
 
     UploadBuffer<ObjectConstants>* mObjectCB = nullptr;
-    ComPtr<ID3D12DescriptorHeap> mCbvHeap;
     ComPtr<ID3D12RootSignature> mRootSignature;
     ComPtr<ID3D12PipelineState> mPSO;
+
+    ComPtr<ID3D12DescriptorHeap> mCbvSrvHeap;
+    UINT mCbvSrvDescriptorSize = 0;
 
     std::vector<D3D12_INPUT_ELEMENT_DESC> mInputLayout;
 
@@ -69,7 +78,8 @@ private:
     D3D12_VERTEX_BUFFER_VIEW mVertexBufferView;
     D3D12_INDEX_BUFFER_VIEW mIndexBufferView;
 
-    std::vector<MeshData> mMeshes;
+    std::vector<Submesh> mSubmeshes;
+    std::unordered_map<std::wstring, std::unique_ptr<Texture>> mTextures;
 };
 
 #endif // BOX_APP_H

@@ -2,7 +2,7 @@
 
 #include <windows.h>
 
-GameTimer::GameTimer() : mSecondsPerCount(0.0), mDeltaTime(0.0), mBaseTime(0), mStopTime(0.0),
+GameTimer::GameTimer() : mSecondsPerCount(0.0), mDeltaTime(0.0), mBaseTime(0), mStopTime(0),
 mPausedTime(0), mPrevTime(0), mCurrTime(0), mStopped(false) {
     __int64 countsPerSec;
     QueryPerformanceFrequency((LARGE_INTEGER*)&countsPerSec);

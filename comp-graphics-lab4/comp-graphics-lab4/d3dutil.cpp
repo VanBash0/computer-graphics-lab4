@@ -15,7 +15,7 @@ ComPtr<ID3D12Resource> D3DUtil::createDefaultBuffer(ID3D12Device* device, ID3D12
         &defaultHeapProps,
         D3D12_HEAP_FLAG_NONE,
         &bufferDesc,
-        D3D12_RESOURCE_STATE_COMMON,
+        D3D12_RESOURCE_STATE_COPY_DEST,
         nullptr,
         IID_PPV_ARGS(defaultBuffer.GetAddressOf())));
 

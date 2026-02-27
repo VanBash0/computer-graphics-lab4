@@ -3,22 +3,30 @@
 
 #include "vertex.h"
 
-#include <string>
+#include <SimpleMath.h>
+#include <vector>
 
-struct MaterialData {
-    DirectX::XMFLOAT4 diffuseColor = {1.f, 1.f, 1.f, 1.f};
-    std::string diffuseTexturePath;
-    int srvIndex = -1;
+struct Material {
+    Vector4 diffuseColor;
+    Vector4 ambientColor;
+    Vector4 specularColor;
+    float shininess;
+
+    UINT diffuseSrvHeapIndex = 0;
+    std::string diffuseTextureName;
+};
+
+struct Submesh {
+    UINT indexCount = 0;
+    UINT startIndiceIndex = 0;
+    UINT startVerticeIndex = 0;
+    Material material;
 };
 
 struct MeshData {
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
-    MaterialData material;
-
-    UINT startIndex = 0;
-    UINT baseVertex = 0;
-    UINT indexCount = 0;
+    std::vector<Submesh> submeshes;
 };
 
 #endif // MESH_DATA_H
