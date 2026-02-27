@@ -5,7 +5,6 @@
 #include <dxgi1_6.h>
 #include "wrl.h"
 #include "game_timer.h"
-#include "mesh_data.h"
 #include <string>
 #include <vector>
 
@@ -61,9 +60,6 @@ protected:
     ComPtr<ID3D12Resource> mSwapChainBuffer[swapChainBufferCount];
     ComPtr<ID3D12Resource> mDepthStencilBuffer;
 
-    ComPtr<ID3D12DescriptorHeap> mSrvHeap;
-    std::vector<ComPtr<ID3D12Resource>> mTextureResources;
-
     DXGI_FORMAT mBackBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
     DXGI_FORMAT mDepthStencilFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
     D3D12_VIEWPORT mViewport{};
@@ -105,7 +101,6 @@ protected:
     void setDepthBufferBeingDepthBuffer();
     void setViewport();
     void setScissorRect();
-    void createTextureResources(const std::vector<MeshData>& meshes, const std::string& modelFilePath);
 
     virtual void onMouseDown(WPARAM btnState, int x, int y) {};
     virtual void onMouseUp(WPARAM btnState, int x, int y) {};

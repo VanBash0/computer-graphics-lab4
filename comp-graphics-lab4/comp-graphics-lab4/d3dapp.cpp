@@ -6,9 +6,6 @@
 #include "vertex.h"
 #include "d3dutil.h"
 #include <DirectXColors.h>
-#include <filesystem>
-#include "directxtex/DirectXTex.h"
-using namespace DirectX;
 
 D3DApp* D3DApp::mApp = nullptr;
 
@@ -412,99 +409,5 @@ void D3DApp::calculateFrameStats() {
         SetWindowText(mhMainWnd, windowTitle.c_str());
         frameCount = 0;
         timeElapsed += 1.0f;
-    }
-}
-
-void D3DApp::createTextureResources(const std::vector<MeshData>& meshes, const std::string& modelFilePath) {
-    std::unordered_map<std::string, UINT> pathToIndexMap;
-    std::vector<std::string> uniquePaths;
-    std::filesystem::path modelDirectory = std::filesystem::path(modelFilePath).parent_path();
-    for (auto& mesh : meshes) {
-        if (mesh.material.diffuseTexturePath.empty()) continue;
-
-        std::filesystem::path variant = mesh.material.diffuseTexturePath;
-        if (variant.is_relative()) variant = modelDirectory / variant;
-        std::string path = variant.lexically_normal().string();
-
-        if (pathToIndexMap.find(path) == pathToIndexMap.end()) {
-            pathToIndexMap[path] = static_cast<UINT>(uniquePaths.size());
-            uniquePaths.push_back(path);
-        }
-        const_cast<MeshData&>(mesh).material.srvIndex = pathToIndexMap[path];
-
-        if (uniquePaths.empty()) return;
-
-        D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
-        srvHeapDesc.NumDescriptors = static_cast<UINT>(uniquePaths.size());
-        srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-        srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-        failCheck(md3dDevice->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&mSrvHeap)));
-
-        mCbvSrvDescriptorSize = md3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-        mTextureResources.resize(uniquePaths.size());
-
-        for (size_t i = 0; i < uniquePaths.size(); ++i) {
-            std::wstring wpath = std::filesystem::path(uniquePaths[i]).wstring();
-
-            TexMetadata metadata;
-            ScratchImage scratchImg;
-            failCheck(LoadFromWICFile(wpath.c_str(), WIC_FLAGS_NONE, &metadata, scratchImg));
-
-            const Image* img = scratchImg.GetImage(0, 0, 0);
-
-            CD3DX12_RESOURCE_DESC texDesc =
-                CD3DX12_RESOURCE_DESC::Tex2D(metadata.format, metadata.width,
-                    static_cast<UINT>(metadata.height),
-                    static_cast<UINT16>(metadata.arraySize),
-                    static_cast<UINT16>(metadata.mipLevels));
-
-            auto heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-            failCheck(md3dDevice->CreateCommittedResource(
-                &heapProps,
-                D3D12_HEAP_FLAG_NONE,
-                &texDesc,
-                D3D12_RESOURCE_STATE_COPY_DEST,
-                nullptr,
-                IID_PPV_ARGS(&mTextureResources[i])
-            ));
-
-            UINT64 uploadBufferSize = GetRequiredIntermediateSize(mTextureResources[i].Get(), 0, 1);
-            ComPtr<ID3D12Resource> uploadHeap;
-
-            heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-            auto buffer = CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize);
-            failCheck(md3dDevice->CreateCommittedResource(
-                &heapProps,
-                D3D12_HEAP_FLAG_NONE,
-                &buffer,
-                D3D12_RESOURCE_STATE_GENERIC_READ,
-                nullptr,
-                IID_PPV_ARGS(&uploadHeap)
-            ));
-
-            D3D12_SUBRESOURCE_DATA textureData = {};
-            textureData.pData = img->pixels;
-            textureData.RowPitch = img->rowPitch;
-            textureData.SlicePitch = img->slicePitch;
-
-            UpdateSubresources(mCommandList.Get(), mTextureResources[i].Get(), uploadHeap.Get(), 0, 0, 1, &textureData);
-
-            auto transition = CD3DX12_RESOURCE_BARRIER::Transition(
-                mTextureResources[i].Get(),
-                D3D12_RESOURCE_STATE_COPY_DEST,
-                D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-            mCommandList->ResourceBarrier(1, &transition);
-
-            D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-            srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-            srvDesc.Format = mTextureResources[i]->GetDesc().Format;
-            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-            srvDesc.Texture2D.MostDetailedMip = 0;
-            srvDesc.Texture2D.MipLevels = mTextureResources[i]->GetDesc().MipLevels;
-            srvDesc.Texture2D.ResourceMinLODClamp = 0.f;
-
-            CD3DX12_CPU_DESCRIPTOR_HANDLE handle(mSrvHeap->GetCPUDescriptorHandleForHeapStart(), static_cast<INT>(i), mCbvSrvDescriptorSize);
-            md3dDevice->CreateShaderResourceView(mTextureResources[i].Get(), &srvDesc, handle);
-        }
     }
 }
