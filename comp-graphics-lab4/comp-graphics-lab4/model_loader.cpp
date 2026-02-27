@@ -4,6 +4,7 @@
 #include <assimp/postprocess.h>
 #include <DirectXMath.h>
 #include <stdexcept>
+#include <filesystem>
 
 using namespace DirectX;
 
@@ -45,6 +46,15 @@ void ModelLoader::parseMesh(const aiMesh* mesh, const aiMatrix4x4& transform, Me
         else {
             vertex.normal = { 0.f, 1.f, 0.f };
         }
+
+        if (mesh->HasTextureCoords(0)) {
+            vertex.texCoord.x = mesh->mTextureCoords[0][i].x;
+            vertex.texCoord.y = mesh->mTextureCoords[0][i].y;
+        }
+        else {
+            vertex.texCoord = {0, 0};
+        }
+
         meshData.vertices.push_back(vertex);
     }
 
@@ -61,20 +71,15 @@ void ModelLoader::parseMesh(const aiMesh* mesh, const aiMatrix4x4& transform, Me
     submesh.startIndiceIndex = startIndex;
     submesh.startVerticeIndex = baseVertex;
 
-    submesh.material.diffuseSrvHeapIndex = mesh->mMaterialIndex;
-
+    aiString texturePath;
     if (scene && mesh->mMaterialIndex >= 0) {
         int index = mesh->mMaterialIndex;
         aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
-        aiColor4D color;
-        if (material->Get(AI_MATKEY_COLOR_DIFFUSE, color) == AI_SUCCESS) {
-            submesh.material.diffuseColor = { color.r, color.g, color.b, color.a };
-        }
-        if (material->Get(AI_MATKEY_COLOR_AMBIENT, color) == AI_SUCCESS) {
-            submesh.material.ambientColor = { color.r, color.g, color.b, color.a };
-        }
-        if (material->Get(AI_MATKEY_COLOR_SPECULAR, color) == AI_SUCCESS) {
-            submesh.material.specularColor = { color.r, color.g, color.b, color.a };
+        if (material->GetTexture(aiTextureType_DIFFUSE, 0, &texturePath) == AI_SUCCESS) {
+            std::string fullPath = texturePath.C_Str();
+
+            std::filesystem::path p(fullPath);
+            submesh.material.diffuseTextureName = p.stem().string();
         }
         float shininess = 0.f;
         if (material->Get(AI_MATKEY_SHININESS, shininess) == AI_SUCCESS) {

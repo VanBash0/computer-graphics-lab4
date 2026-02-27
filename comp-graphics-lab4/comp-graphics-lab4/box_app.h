@@ -32,14 +32,12 @@ private:
 
     void buildBuffers();
     void buildConstantBuffer();
-    void buildCbv();
-    void buildSrv();
     void buildRootSignature();
     void buildPso();
     void initializeConstants();
     void loadTextures();
-
     void buildCbvSrvHeap();
+    void bindMaterialsToTextures();
 
     void update(const GameTimer& gt) override;
     void draw(const GameTimer& gt) override;
@@ -53,10 +51,11 @@ private:
     ComPtr<ID3D12Resource> mIndexBufferUploader;
 
     UploadBuffer<ObjectConstants>* mObjectCB = nullptr;
-    ComPtr<ID3D12DescriptorHeap> mCbvHeap;
-    ComPtr<ID3D12DescriptorHeap> mSrvHeap;
     ComPtr<ID3D12RootSignature> mRootSignature;
     ComPtr<ID3D12PipelineState> mPSO;
+
+    ComPtr<ID3D12DescriptorHeap> mCbvSrvHeap;
+    UINT mCbvSrvDescriptorSize = 0;
 
     std::vector<D3D12_INPUT_ELEMENT_DESC> mInputLayout;
 

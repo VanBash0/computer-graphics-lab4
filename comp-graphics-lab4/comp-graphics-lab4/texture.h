@@ -9,7 +9,8 @@ struct Texture {
     std::wstring fileName;
     std::wstring filePath;
     Microsoft::WRL::ComPtr<ID3D12Resource> resource = nullptr; 
-    Microsoft::WRL::ComPtr<ID3D12Resource> uploadHeap = nullptr; 
+    Microsoft::WRL::ComPtr<ID3D12Resource> uploadHeap = nullptr;
+    UINT srvHeapIndex = 0;
 };
 
 #endif // TEXTURE_H
