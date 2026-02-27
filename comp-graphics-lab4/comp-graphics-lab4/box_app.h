@@ -85,6 +85,10 @@ private:
     std::vector<Submesh> mSubmeshes;
     std::unordered_map<std::wstring, std::unique_ptr<Texture>> mTextures;
     ComPtr<ID3D12Resource> mDefaultTex = nullptr;
+
+    DirectX::XMFLOAT2 mTextureOffset = {0.0f, 0.0f};
+    float mTextureScrollSpeedX = 0.001f;
+    float mTextureScrollSpeedY = 0.001f;
 };
 
 #endif // BOX_APP_H
