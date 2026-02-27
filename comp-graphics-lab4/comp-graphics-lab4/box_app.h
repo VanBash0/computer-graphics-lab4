@@ -43,6 +43,8 @@ private:
     void draw(const GameTimer& gt) override;
     void onMouseMove(WPARAM btnState, int x, int y) override;
 
+    void createDefaultTexture();
+
     ComPtr<ID3D12Resource> mVertexBufferGPU;
     ComPtr<ID3D12Resource> mVertexBufferUploader;
 
@@ -80,6 +82,7 @@ private:
 
     std::vector<Submesh> mSubmeshes;
     std::unordered_map<std::wstring, std::unique_ptr<Texture>> mTextures;
+    ComPtr<ID3D12Resource> mDefaultTex = nullptr;
 };
 
 #endif // BOX_APP_H

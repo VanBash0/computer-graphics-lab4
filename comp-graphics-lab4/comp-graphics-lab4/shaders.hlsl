@@ -39,7 +39,7 @@ float4 PS(VertexOut pin) : SV_Target
 {
     float3 normalW = normalize(pin.NormalW);
 
-    float3 lightPos = float3(5.0f, 5.0f, -5.0f);
+    float3 lightPos = float3(0.0f, 5.0f, -5.0f);
     float3 lightDir = normalize(lightPos - pin.PosW);
     float3 eyePos   = float3(0.0f, 0.0f, -5.0f);
     float3 viewDir  = normalize(eyePos - pin.PosW);
