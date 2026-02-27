@@ -17,6 +17,7 @@ using namespace DirectX;
 struct ObjectConstants {
     XMFLOAT4X4 WorldViewProj;
     XMFLOAT4X4 World;
+    XMFLOAT4X4 TextureTransform;
 };
 
 class BoxApp : public D3DApp {
@@ -28,6 +29,7 @@ public:
 private:
     const float SCENE_SCALE = 0.01f;
     const float SPEED_FACTOR = 10.f;
+    const Vector3 TEXTURE_SCALE = Vector3(1.f, 1.f, 1.f);
     void setObjectSize(Vertex& vertex, float scale);
 
     void buildBuffers();

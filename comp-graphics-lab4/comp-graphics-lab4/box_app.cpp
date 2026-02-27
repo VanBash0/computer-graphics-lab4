@@ -121,10 +121,13 @@ void BoxApp::update(const GameTimer& gt)
     XMMATRIX world = XMLoadFloat4x4(&mWorld);
     XMMATRIX proj = XMLoadFloat4x4(&mProj);
     XMMATRIX worldViewProj = world * view * proj;
+    XMMATRIX texScale = XMMatrixScaling(TEXTURE_SCALE.x, TEXTURE_SCALE.y, TEXTURE_SCALE.z);
 
     ObjectConstants objConstants;
     XMStoreFloat4x4(&objConstants.WorldViewProj, XMMatrixTranspose(worldViewProj));
     XMStoreFloat4x4(&objConstants.World, XMMatrixTranspose(world));
+    XMStoreFloat4x4(&objConstants.TextureTransform, XMMatrixTranspose(texScale));
+
     mObjectCB->copyData(0, objConstants);
 }
 
