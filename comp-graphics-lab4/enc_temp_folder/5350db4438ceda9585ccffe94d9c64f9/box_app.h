@@ -39,8 +39,6 @@ private:
     void initializeConstants();
     void loadTextures();
 
-    void buildCbvSrvHeap();
-
     void update(const GameTimer& gt) override;
     void draw(const GameTimer& gt) override;
     void onMouseMove(WPARAM btnState, int x, int y) override;

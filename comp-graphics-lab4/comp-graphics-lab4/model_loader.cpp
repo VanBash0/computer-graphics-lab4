@@ -61,7 +61,10 @@ void ModelLoader::parseMesh(const aiMesh* mesh, const aiMatrix4x4& transform, Me
     submesh.startIndiceIndex = startIndex;
     submesh.startVerticeIndex = baseVertex;
 
-    if (scene && mesh->mMaterialIndex <= -1) {
+    submesh.material.diffuseSrvHeapIndex = mesh->mMaterialIndex;
+
+    if (scene && mesh->mMaterialIndex >= 0) {
+        int index = mesh->mMaterialIndex;
         aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
         aiColor4D color;
         if (material->Get(AI_MATKEY_COLOR_DIFFUSE, color) == AI_SUCCESS) {

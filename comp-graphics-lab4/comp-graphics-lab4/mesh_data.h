@@ -11,6 +11,7 @@ struct Material {
     Vector4 ambientColor;
     Vector4 specularColor;
     float shininess;
+    UINT diffuseSrvHeapIndex = 0;
 };
 
 struct Submesh {

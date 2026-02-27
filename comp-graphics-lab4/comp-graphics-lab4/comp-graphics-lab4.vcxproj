@@ -133,6 +133,7 @@
     <ClCompile Include="box_app.cpp" />
     <ClCompile Include="d3dapp.cpp" />
     <ClCompile Include="d3dutil.cpp" />
+    <ClCompile Include="DDSTextureLoader.cpp" />
     <ClCompile Include="game_timer.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="model_loader.cpp" />
@@ -144,10 +145,12 @@
     <ClInclude Include="box_app.h" />
     <ClInclude Include="d3dapp.h" />
     <ClInclude Include="d3dutil.h" />
+    <ClInclude Include="DDSTextureLoader.h" />
     <ClInclude Include="fail_checker.h" />
     <ClInclude Include="game_timer.h" />
     <ClInclude Include="mesh_data.h" />
     <ClInclude Include="model_loader.h" />
+    <ClInclude Include="texture.h" />
     <ClInclude Include="upload_buffer.h" />
     <ClInclude Include="vertex.h" />
   </ItemGroup>
