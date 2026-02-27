@@ -4,8 +4,10 @@
 #include "d3dapp.h"
 #include "d3dutil.h"
 #include "vertex.h"
-#include <DirectXColors.h>
 #include "upload_buffer.h"
+#include "model_loader.h"
+
+#include <DirectXColors.h>
 #include <DirectXMath.h>
 
 using namespace DirectX;
@@ -69,6 +71,8 @@ private:
 
     D3D12_VERTEX_BUFFER_VIEW mVertexBufferView;
     D3D12_INDEX_BUFFER_VIEW mIndexBufferView;
+
+    std::vector<Submesh> mSubmeshes;
 };
 
 #endif // BOX_APP_H

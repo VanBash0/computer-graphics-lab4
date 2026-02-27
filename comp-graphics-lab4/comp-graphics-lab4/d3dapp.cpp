@@ -135,7 +135,7 @@ void D3DApp::createRenderTargetViews() {
 }
 
 void D3DApp::createDepthStencilBufferView() {
-    D3D12_RESOURCE_DESC depthStencilDesc;
+    D3D12_RESOURCE_DESC depthStencilDesc = {};
     depthStencilDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
     depthStencilDesc.Alignment = 0;
     depthStencilDesc.Width = mClientWidth;
@@ -148,7 +148,7 @@ void D3DApp::createDepthStencilBufferView() {
     depthStencilDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
     depthStencilDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 
-    D3D12_CLEAR_VALUE optClear;
+    D3D12_CLEAR_VALUE optClear = {};
     optClear.Format = mDepthStencilFormat;
     optClear.DepthStencil.Depth = 1.0f;
     optClear.DepthStencil.Stencil = 0;
@@ -166,11 +166,6 @@ void D3DApp::createDepthStencilBufferView() {
 
 void D3DApp::setDepthBufferBeingDepthBuffer() {
     md3dDevice->CreateDepthStencilView(mDepthStencilBuffer.Get(), nullptr, getDepthStencilView());
-
-    auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(mDepthStencilBuffer.Get(),
-        D3D12_RESOURCE_STATE_COMMON,
-        D3D12_RESOURCE_STATE_DEPTH_WRITE);
-    mCommandList->ResourceBarrier(1, &barrier);
 }
 
 void D3DApp::setViewport() {
@@ -339,7 +334,6 @@ void D3DApp::onResize() {
 
     for (int i = 0; i < swapChainBufferCount; ++i)
         mSwapChainBuffer[i].Reset();
-
     mDepthStencilBuffer.Reset();
 
     DXGI_SWAP_CHAIN_DESC swapChainDesc;
@@ -350,10 +344,19 @@ void D3DApp::onResize() {
 
     mCurrBackBuffer = 0;
 
+    failCheck(mDirectCmdListAlloc->Reset());
+    failCheck(mCommandList->Reset(mDirectCmdListAlloc.Get(), nullptr));
+
     createRenderTargetViews();
     createDepthStencilBufferView();
     setViewport();
     setScissorRect();
+
+    failCheck(mCommandList->Close());
+    ID3D12CommandList* cmdsLists[] = { mCommandList.Get() };
+    mCommandQueue->ExecuteCommandLists(_countof(cmdsLists), cmdsLists);
+
+    flushCommandQueue();
 }
 
 int D3DApp::run() {

@@ -44,6 +44,13 @@ void BoxApp::buildBuffers() {
     mIndexBufferGPU = D3DUtil::createDefaultBuffer(md3dDevice.Get(), mCommandList.Get(),
         mesh.indices.data(), ibByteSize, mIndexBufferUploader);
 
+    UINT indexOffset = 0;
+    UINT vertexOffset = 0;
+    for (const auto& sm : mesh.submeshes) {
+        Submesh submesh(sm);
+        mSubmeshes.push_back(submesh);
+    }
+
     mInputLayout = {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
         { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
@@ -210,7 +217,10 @@ void BoxApp::draw(const GameTimer& gt)
     mCommandList->IASetVertexBuffers(0, 1, &mVertexBufferView);
     mCommandList->IASetIndexBuffer(&mIndexBufferView);
 
-    mCommandList->DrawIndexedInstanced(mIndexCount, 1, 0, 0, 0);
+    for (const auto& submesh : mSubmeshes) {
+        mCommandList->DrawIndexedInstanced(submesh.indexCount, 1, submesh.startIndiceIndex, 0, 0);
+    }
+    //mCommandList->DrawIndexedInstanced(mIndexCount, 1, 0, 0, 0);
 
     barrier = CD3DX12_RESOURCE_BARRIER::Transition(
         getCurrentBackBufferResource(),
