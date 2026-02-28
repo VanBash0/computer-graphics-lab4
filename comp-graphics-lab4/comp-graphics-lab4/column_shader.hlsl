@@ -3,6 +3,8 @@ cbuffer cbPerObject : register(b0)
     float4x4 gWorldViewProj;
     float4x4 gWorld;
     float4x4 gTexTransform;
+    float gTotalTime;
+    float3 gPadding;
 };
 
 Texture2D gDiffuseMap : register(t0);
@@ -26,10 +28,18 @@ struct VertexOut
 VertexOut VS(VertexIn vin)
 {
     VertexOut vout;
+    
+    float speed = 4.f;
+    float frequency = .5f;
+    float amplitude = 2.f;
+    
+    float swing = sin(gTotalTime * speed + vin.PosL.y * frequency) * amplitude;
+    float3 newPos = vin.PosL;
+    newPos.x += swing * (vin.PosL.y * 0.1f);
 
-    vout.PosW = mul(float4(vin.PosL, 1.0f), gWorld).xyz;
+    vout.PosW = mul(float4(newPos, 1.0f), gWorld).xyz;
     vout.NormalW = mul(vin.NormalL, (float3x3)gWorld);
-    vout.PosH = mul(float4(vin.PosL, 1.0f), gWorldViewProj);
+    vout.PosH = mul(float4(newPos, 1.0f), gWorldViewProj);
 
     float4 texC = mul(float4(vin.TexC, 0.0f, 1.0f), gTexTransform);
     vout.TexC = texC.xy;

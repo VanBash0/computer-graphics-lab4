@@ -3,6 +3,8 @@ cbuffer cbPerObject : register(b0)
     float4x4 gWorldViewProj;
     float4x4 gWorld;
     float4x4 gTexTransform;
+    float gTotalTime;
+    float3 gPadding;
 };
 
 Texture2D gDiffuseMap : register(t0);

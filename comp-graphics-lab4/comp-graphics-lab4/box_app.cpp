@@ -145,6 +145,7 @@ void BoxApp::update(const GameTimer& gt)
     XMMATRIX texOffset = XMMatrixTranslation(mTextureOffset.x, mTextureOffset.y, 0.f);
     XMMATRIX texTransformAnim = texScaleAnim * texOffset;
     XMStoreFloat4x4(&objConstantsAnim.TextureTransform, XMMatrixTranspose(texTransformAnim));
+    objConstantsAnim.TotalTime = gt.getTotalTime();
 
     mObjectCB->copyData(1, objConstantsAnim);
 }
@@ -220,12 +221,12 @@ void BoxApp::draw(const GameTimer& gt)
     mCommandList->IASetIndexBuffer(&mIndexBufferView);
 
     for (const auto& submesh : mSubmeshes) {
-        if (submesh.material.diffuseTextureName.find("column") != std::string::npos) {
-            mCommandList->SetPipelineState(mPSOColumn.Get());
-        }
-        else {
-            mCommandList->SetPipelineState(mPSO.Get());
-        }
+        bool isColumn = (submesh.material.diffuseTextureName.find("column") != std::string::npos);
+        mCommandList->SetPipelineState(isColumn ? mPSOColumn.Get() : mPSO.Get());
+
+        CD3DX12_GPU_DESCRIPTOR_HANDLE cbvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart());
+        cbvHandle.Offset(isColumn ? 1 : 0, mCbvSrvDescriptorSize);
+        mCommandList->SetGraphicsRootDescriptorTable(0, cbvHandle);
 
         CD3DX12_GPU_DESCRIPTOR_HANDLE srvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart());
         srvHandle.Offset(submesh.material.diffuseSrvHeapIndex, mCbvSrvDescriptorSize);
@@ -370,6 +371,10 @@ void BoxApp::buildCbvSrvHeap() {
     md3dDevice->CreateConstantBufferView(&cbvDesc, handle);
 
     handle.Offset(1, mCbvSrvDescriptorSize);
+    cbvDesc.BufferLocation += cbvDesc.SizeInBytes; // Сдвигаемся ко второму элементу в UploadBuffer
+    md3dDevice->CreateConstantBufferView(&cbvDesc, handle);
+
+    handle.Offset(1, mCbvSrvDescriptorSize);
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
     srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -378,21 +383,16 @@ void BoxApp::buildCbvSrvHeap() {
     srvDesc.Texture2D.MipLevels = 1;
     md3dDevice->CreateShaderResourceView(mDefaultTex.Get(), &srvDesc, handle);
 
-    UINT i = 2;
+    UINT i = 3; 
     for (auto& kv : mTextures) {
         Texture* texture = kv.second.get();
-        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-        srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         srvDesc.Format = texture->resource->GetDesc().Format;
-        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-        srvDesc.Texture2D.MostDetailedMip = 0;
         srvDesc.Texture2D.MipLevels = texture->resource->GetDesc().MipLevels;
 
         CD3DX12_CPU_DESCRIPTOR_HANDLE srvHandle(mCbvSrvHeap->GetCPUDescriptorHandleForHeapStart(), i, mCbvSrvDescriptorSize);
         md3dDevice->CreateShaderResourceView(texture->resource.Get(), &srvDesc, srvHandle);
 
         texture->srvHeapIndex = i;
-
         ++i;
     }
 }
@@ -400,20 +400,12 @@ void BoxApp::buildCbvSrvHeap() {
 void BoxApp::bindMaterialsToTextures() {
     for (auto& submesh : mSubmeshes) {
         const std::string& texName = submesh.material.diffuseTextureName;
-
         if (texName.empty()) {
-            submesh.material.diffuseSrvHeapIndex = 1;
+            submesh.material.diffuseSrvHeapIndex = 2;
             continue;
         }
-
         auto it = mTextures.find(std::wstring(texName.begin(), texName.end()));
-
-        if (it != mTextures.end()) {
-            submesh.material.diffuseSrvHeapIndex = it->second->srvHeapIndex;
-        }
-        else {
-            submesh.material.diffuseSrvHeapIndex = 1;
-        }
+        submesh.material.diffuseSrvHeapIndex = (it != mTextures.end()) ? it->second->srvHeapIndex : 2;
     }
 }
 

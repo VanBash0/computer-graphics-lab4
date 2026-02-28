@@ -18,6 +18,8 @@ struct ObjectConstants {
     XMFLOAT4X4 WorldViewProj;
     XMFLOAT4X4 World;
     XMFLOAT4X4 TextureTransform;
+    float TotalTime;
+    XMFLOAT3 Padding;
 };
 
 class BoxApp : public D3DApp {
