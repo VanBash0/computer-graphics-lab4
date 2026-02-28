@@ -268,13 +268,12 @@ void BoxApp::buildRootSignature() {
         IID_PPV_ARGS(&mRootSignature)));
 }
 
-void BoxApp::buildPso()
-{
+void BoxApp::buildPso() {
     ComPtr<ID3DBlob> mvsByteCode;
     ComPtr<ID3DBlob> mpsByteCode;
 
-    mvsByteCode = D3DUtil::compileShader(L"shaders.hlsl", nullptr, "VS", "vs_5_0");
-    mpsByteCode = D3DUtil::compileShader(L"shaders.hlsl", nullptr, "PS", "ps_5_0");
+    mvsByteCode = D3DUtil::compileShader(L"main_shader.hlsl", nullptr, "VS", "vs_5_0");
+    mpsByteCode = D3DUtil::compileShader(L"main_shader.hlsl", nullptr, "PS", "ps_5_0");
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
     ZeroMemory(&psoDesc, sizeof(D3D12_GRAPHICS_PIPELINE_STATE_DESC));

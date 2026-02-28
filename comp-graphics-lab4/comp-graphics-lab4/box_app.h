@@ -40,6 +40,7 @@ private:
     void loadTextures();
     void buildCbvSrvHeap();
     void bindMaterialsToTextures();
+    void buildColumnPso();
 
     void update(const GameTimer& gt) override;
     void draw(const GameTimer& gt) override;
@@ -87,8 +88,8 @@ private:
     ComPtr<ID3D12Resource> mDefaultTex = nullptr;
 
     DirectX::XMFLOAT2 mTextureOffset = {0.0f, 0.0f};
-    float mTextureScrollSpeedX = 0.001f;
-    float mTextureScrollSpeedY = 0.001f;
+    float mTextureScrollSpeedX = 0.0001f;
+    float mTextureScrollSpeedY = 0.0001f;
 };
 
 #endif // BOX_APP_H
