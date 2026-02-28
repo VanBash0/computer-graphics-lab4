@@ -22,7 +22,8 @@ void BoxApp::buildResources() {
     buildConstantBuffer();
     buildCbvSrvHeap();
     bindMaterialsToTextures();
-    buildPso();
+    buildPso(L"main_shader.hlsl", mPSO);
+    buildPso(L"column_shader.hlsl", mPSOColumn);
     failCheck(mCommandList->Close());
 
     ID3D12CommandList* cmds[] = { mCommandList.Get() };
@@ -75,7 +76,7 @@ void BoxApp::buildBuffers() {
 
 void BoxApp::buildConstantBuffer()
 {
-    mObjectCB = new UploadBuffer<ObjectConstants>(md3dDevice.Get(), 1, true);
+    mObjectCB = new UploadBuffer<ObjectConstants>(md3dDevice.Get(), 2, true);
 }
 
 void BoxApp::update(const GameTimer& gt)
@@ -127,17 +128,25 @@ void BoxApp::update(const GameTimer& gt)
     if (mTextureOffset.x > 1.f) mTextureOffset.x -= 1.f;
     if (mTextureOffset.y > 1.f) mTextureOffset.y -= 1.f;
 
+    ObjectConstants objConstantsNoAnim;
+    XMStoreFloat4x4(&objConstantsNoAnim.WorldViewProj, XMMatrixTranspose(worldViewProj));
+    XMStoreFloat4x4(&objConstantsNoAnim.World, XMMatrixTranspose(world));
+
     XMMATRIX texScale = XMMatrixScaling(TEXTURE_SCALE.x, TEXTURE_SCALE.y, TEXTURE_SCALE.z);
+    XMStoreFloat4x4(&objConstantsNoAnim.TextureTransform, XMMatrixTranspose(texScale));
+
+    mObjectCB->copyData(0, objConstantsNoAnim);
+
+    ObjectConstants objConstantsAnim;
+    XMStoreFloat4x4(&objConstantsAnim.WorldViewProj, XMMatrixTranspose(worldViewProj));
+    XMStoreFloat4x4(&objConstantsAnim.World, XMMatrixTranspose(world));
+
+    XMMATRIX texScaleAnim = XMMatrixScaling(TEXTURE_SCALE.x, TEXTURE_SCALE.y, TEXTURE_SCALE.z);
     XMMATRIX texOffset = XMMatrixTranslation(mTextureOffset.x, mTextureOffset.y, 0.f);
+    XMMATRIX texTransformAnim = texScaleAnim * texOffset;
+    XMStoreFloat4x4(&objConstantsAnim.TextureTransform, XMMatrixTranspose(texTransformAnim));
 
-    XMMATRIX texTransform = texScale * texOffset;
-
-    ObjectConstants objConstants;
-    XMStoreFloat4x4(&objConstants.WorldViewProj, XMMatrixTranspose(worldViewProj));
-    XMStoreFloat4x4(&objConstants.World, XMMatrixTranspose(world));
-    XMStoreFloat4x4(&objConstants.TextureTransform, XMMatrixTranspose(texTransform));
-
-    mObjectCB->copyData(0, objConstants);
+    mObjectCB->copyData(1, objConstantsAnim);
 }
 
 BoxApp::~BoxApp()
@@ -211,6 +220,13 @@ void BoxApp::draw(const GameTimer& gt)
     mCommandList->IASetIndexBuffer(&mIndexBufferView);
 
     for (const auto& submesh : mSubmeshes) {
+        if (submesh.material.diffuseTextureName.find("column") != std::string::npos) {
+            mCommandList->SetPipelineState(mPSOColumn.Get());
+        }
+        else {
+            mCommandList->SetPipelineState(mPSO.Get());
+        }
+
         CD3DX12_GPU_DESCRIPTOR_HANDLE srvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart());
         srvHandle.Offset(submesh.material.diffuseSrvHeapIndex, mCbvSrvDescriptorSize);
         mCommandList->SetGraphicsRootDescriptorTable(1, srvHandle);
@@ -268,12 +284,12 @@ void BoxApp::buildRootSignature() {
         IID_PPV_ARGS(&mRootSignature)));
 }
 
-void BoxApp::buildPso() {
+void BoxApp::buildPso(const std::wstring& shaderName, ComPtr<ID3D12PipelineState>& pso) {
     ComPtr<ID3DBlob> mvsByteCode;
     ComPtr<ID3DBlob> mpsByteCode;
 
-    mvsByteCode = D3DUtil::compileShader(L"main_shader.hlsl", nullptr, "VS", "vs_5_0");
-    mpsByteCode = D3DUtil::compileShader(L"main_shader.hlsl", nullptr, "PS", "ps_5_0");
+    mvsByteCode = D3DUtil::compileShader(shaderName, nullptr, "VS", "vs_5_0");
+    mpsByteCode = D3DUtil::compileShader(shaderName, nullptr, "PS", "ps_5_0");
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
     ZeroMemory(&psoDesc, sizeof(D3D12_GRAPHICS_PIPELINE_STATE_DESC));
@@ -301,7 +317,7 @@ void BoxApp::buildPso() {
     psoDesc.SampleDesc.Count = m4xMsaaState ? 4 : 1;
     psoDesc.SampleDesc.Quality = m4xMsaaState ? (m4xMsaaQuality - 1) : 0;
     psoDesc.InputLayout = { mInputLayout.data(), (UINT)mInputLayout.size() };
-    failCheck(md3dDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mPSO)));
+    failCheck(md3dDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pso)));
 }
 
 void BoxApp::onResize() {
@@ -335,7 +351,7 @@ void BoxApp::loadTextures() {
 
 void BoxApp::buildCbvSrvHeap() {
     UINT numTextures = static_cast<UINT>(mTextures.size());
-    UINT numDescriptors = 2 + numTextures;
+    UINT numDescriptors = 3 + numTextures;
 
     D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
     heapDesc.NumDescriptors = numDescriptors;
@@ -347,6 +363,7 @@ void BoxApp::buildCbvSrvHeap() {
     mCbvSrvDescriptorSize = md3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
     CD3DX12_CPU_DESCRIPTOR_HANDLE handle(mCbvSrvHeap->GetCPUDescriptorHandleForHeapStart());
+
     D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
     cbvDesc.BufferLocation = mObjectCB->getResource()->GetGPUVirtualAddress();
     cbvDesc.SizeInBytes = D3DUtil::calcConstantBufferByteSize(sizeof(ObjectConstants));

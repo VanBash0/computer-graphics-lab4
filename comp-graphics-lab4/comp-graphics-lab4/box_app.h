@@ -35,7 +35,7 @@ private:
     void buildBuffers();
     void buildConstantBuffer();
     void buildRootSignature();
-    void buildPso();
+    void buildPso(const std::wstring& shaderName, ComPtr<ID3D12PipelineState>& pso);
     void initializeConstants();
     void loadTextures();
     void buildCbvSrvHeap();
@@ -58,6 +58,7 @@ private:
     UploadBuffer<ObjectConstants>* mObjectCB = nullptr;
     ComPtr<ID3D12RootSignature> mRootSignature;
     ComPtr<ID3D12PipelineState> mPSO;
+    ComPtr<ID3D12PipelineState> mPSOColumn;
 
     ComPtr<ID3D12DescriptorHeap> mCbvSrvHeap;
     UINT mCbvSrvDescriptorSize = 0;
