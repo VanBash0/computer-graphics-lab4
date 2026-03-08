@@ -152,6 +152,7 @@
     <ClInclude Include="gbuffer.h" />
     <ClInclude Include="mesh_data.h" />
     <ClInclude Include="model_loader.h" />
+    <ClInclude Include="rendering_system.h" />
     <ClInclude Include="texture.h" />
     <ClInclude Include="upload_buffer.h" />
     <ClInclude Include="vertex.h" />

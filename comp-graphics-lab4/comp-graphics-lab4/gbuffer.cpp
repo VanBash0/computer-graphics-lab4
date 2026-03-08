@@ -37,8 +37,7 @@ GBuffer::GBuffer(ID3D12Device* device, UINT width, UINT height) : device(device)
     buildResources();
 }
 
-void GBuffer::buildDescriptors(
-    CD3DX12_CPU_DESCRIPTOR_HANDLE hCpuSrv,
+void GBuffer::buildDescriptors(CD3DX12_CPU_DESCRIPTOR_HANDLE hCpuSrv,
     CD3DX12_GPU_DESCRIPTOR_HANDLE hGpuSrv,
     CD3DX12_CPU_DESCRIPTOR_HANDLE hCpuRtv,
     UINT cbvSrvDescriptorSize, UINT rtvDescriptorSize) {

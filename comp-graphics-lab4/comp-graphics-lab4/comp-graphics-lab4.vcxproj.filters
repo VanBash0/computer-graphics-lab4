@@ -80,5 +80,8 @@
     <ClInclude Include="gbuffer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="rendering_system.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
