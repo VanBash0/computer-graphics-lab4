@@ -7,6 +7,7 @@
 #include "upload_buffer.h"
 #include "model_loader.h"
 #include "texture.h"
+#include "rendering_system.h"
 
 #include <DirectXColors.h>
 #include <DirectXMath.h>
@@ -20,6 +21,12 @@ struct ObjectConstants {
     XMFLOAT4X4 TextureTransform;
     float TotalTime;
     XMFLOAT3 Padding;
+};
+
+struct PassConstants {
+    XMFLOAT4X4 InvViewProj;
+    XMFLOAT3 EyePosW;
+    float cbPad;
 };
 
 class BoxApp : public D3DApp {
@@ -37,7 +44,7 @@ private:
     void buildBuffers();
     void buildConstantBuffer();
     void buildRootSignature();
-    void buildPso(const std::wstring& shaderName, ComPtr<ID3D12PipelineState>& pso);
+    void buildPso();
     void initializeConstants();
     void loadTextures();
     void buildCbvSrvHeap();
@@ -49,6 +56,7 @@ private:
     void onMouseMove(WPARAM btnState, int x, int y) override;
 
     void createDefaultTexture();
+    void moveCamera(const GameTimer& gt);
 
     ComPtr<ID3D12Resource> mVertexBufferGPU;
     ComPtr<ID3D12Resource> mVertexBufferUploader;
@@ -58,12 +66,22 @@ private:
     ComPtr<ID3D12Resource> mIndexBufferUploader;
 
     UploadBuffer<ObjectConstants>* mObjectCB = nullptr;
+    UploadBuffer<PassConstants>* mPassCB = nullptr;
     ComPtr<ID3D12RootSignature> mRootSignature;
-    ComPtr<ID3D12PipelineState> mPSO;
-    ComPtr<ID3D12PipelineState> mPSOColumn;
+
+    std::unique_ptr<RenderingSystem> mRenderingSystem;
+    ComPtr<ID3D12DescriptorHeap> mGbufferRtvHeap;
+
+    CD3DX12_GPU_DESCRIPTOR_HANDLE mGbufferSrvHandle;
+
+    ComPtr<ID3D12PipelineState> mPsoGeometry;
+    ComPtr<ID3D12PipelineState> mPsoLighting;
 
     ComPtr<ID3D12DescriptorHeap> mCbvSrvHeap;
     UINT mCbvSrvDescriptorSize = 0;
+
+    UINT mDefaultTexIndex = 0;
+    ComPtr<ID3D12Resource> mDefaultTex;
 
     std::vector<D3D12_INPUT_ELEMENT_DESC> mInputLayout;
 
@@ -88,7 +106,6 @@ private:
 
     std::vector<Submesh> mSubmeshes;
     std::unordered_map<std::wstring, std::unique_ptr<Texture>> mTextures;
-    ComPtr<ID3D12Resource> mDefaultTex = nullptr;
 
     DirectX::XMFLOAT2 mTextureOffset = {0.0f, 0.0f};
     float mTextureScrollSpeedX = 0.0001f;

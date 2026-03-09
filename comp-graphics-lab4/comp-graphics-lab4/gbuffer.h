@@ -7,7 +7,7 @@ class GBuffer {
 public:
     GBuffer(ID3D12Device* device, UINT width, UINT height);
 
-    static const int mTexturesNum = 3;
+    static const int mTexturesNum = 2;
 
     ID3D12Resource* getResource(int index) { return mTextures[index].Get(); }
 
@@ -33,7 +33,6 @@ private:
     DXGI_FORMAT mFormats[mTexturesNum] = {
         DXGI_FORMAT_R8G8B8A8_UNORM,
         DXGI_FORMAT_R16G16B16A16_FLOAT,
-        DXGI_FORMAT_R32G32B32A32_FLOAT
     };
 
     CD3DX12_CPU_DESCRIPTOR_HANDLE mhCpuSrv;

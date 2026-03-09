@@ -142,14 +142,14 @@ void D3DApp::createDepthStencilBufferView() {
     depthStencilDesc.Height = mClientHeight;
     depthStencilDesc.DepthOrArraySize = 1;
     depthStencilDesc.MipLevels = 1;
-    depthStencilDesc.Format = mDepthStencilFormat;
+    depthStencilDesc.Format = DXGI_FORMAT_R24G8_TYPELESS;
     depthStencilDesc.SampleDesc.Count = m4xMsaaState ? 4 : 1;
     depthStencilDesc.SampleDesc.Quality = m4xMsaaState ? (m4xMsaaQuality - 1) : 0;
     depthStencilDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
     depthStencilDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 
     D3D12_CLEAR_VALUE optClear = {};
-    optClear.Format = mDepthStencilFormat;
+    optClear.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
     optClear.DepthStencil.Depth = 1.0f;
     optClear.DepthStencil.Stencil = 0;
     CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_DEFAULT);
@@ -157,7 +157,7 @@ void D3DApp::createDepthStencilBufferView() {
         &heapProps,
         D3D12_HEAP_FLAG_NONE,
         &depthStencilDesc,
-        D3D12_RESOURCE_STATE_DEPTH_WRITE,
+        D3D12_RESOURCE_STATE_GENERIC_READ,
         &optClear,
         IID_PPV_ARGS(mDepthStencilBuffer.GetAddressOf())));
 
@@ -165,7 +165,13 @@ void D3DApp::createDepthStencilBufferView() {
 }
 
 void D3DApp::setDepthBufferBeingDepthBuffer() {
-    md3dDevice->CreateDepthStencilView(mDepthStencilBuffer.Get(), nullptr, getDepthStencilView());
+    D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc;
+    dsvDesc.Flags = D3D12_DSV_FLAG_NONE;
+    dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+    dsvDesc.Texture2D.MipSlice = 0;
+    dsvDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+
+    md3dDevice->CreateDepthStencilView(mDepthStencilBuffer.Get(), &dsvDesc, getDepthStencilView());
 }
 
 void D3DApp::setViewport() {

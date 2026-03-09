@@ -14,30 +14,39 @@ void RenderingSystem::buildDescriptors(CD3DX12_CPU_DESCRIPTOR_HANDLE hCpuSrv,
     mGBuffer->buildDescriptors(hCpuSrv, hGpuSrv, hCpuRtv, cbvSrvDescriptorSize, rtvDescriptorSize);
 }
 
-void RenderingSystem::beginGeometryPass(ID3D12GraphicsCommandList* cmdList, D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle) {
-    CD3DX12_RESOURCE_BARRIER barriers[GBuffer::mTexturesNum];
+void RenderingSystem::beginGeometryPass(ID3D12GraphicsCommandList* cmdList, D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle, ID3D12Resource* depthBuffer) {
+    CD3DX12_RESOURCE_BARRIER barriers[GBuffer::mTexturesNum + 1];
     for (int i = 0; i < GBuffer::mTexturesNum; ++i) {
-        barriers[i] = CD3DX12_RESOURCE_BARRIER::Transition(mGBuffer->getResource(i), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        barriers[i] = CD3DX12_RESOURCE_BARRIER::Transition(mGBuffer->getResource(i),
+            D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_RENDER_TARGET);
     }
-    cmdList->ResourceBarrier(GBuffer::mTexturesNum, barriers);
+    barriers[GBuffer::mTexturesNum] = CD3DX12_RESOURCE_BARRIER::Transition(depthBuffer,
+        D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
-    CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandles[GBuffer::mTexturesNum];
+    cmdList->ResourceBarrier(GBuffer::mTexturesNum + 1, barriers);
+
     float clearColor[] = { 0.0f, 0.0f, 0.0f, 1.0f };
-
     for (int i = 0; i < GBuffer::mTexturesNum; ++i) {
-        rtvHandles[i] = mGBuffer->getRtvHandle(i);
-        cmdList->ClearRenderTargetView(rtvHandles[i], clearColor, 0, nullptr);
+        D3D12_CPU_DESCRIPTOR_HANDLE rtv = mGBuffer->getRtvHandle(i);
+        cmdList->ClearRenderTargetView(rtv, clearColor, 0, nullptr);
     }
 
-    cmdList->OMSetRenderTargets(GBuffer::mTexturesNum, &rtvHandles[0], TRUE, &dsvHandle);
+    cmdList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
+
+    CD3DX12_CPU_DESCRIPTOR_HANDLE rtvStart = mGBuffer->getRtvHandle(0);
+    cmdList->OMSetRenderTargets(GBuffer::mTexturesNum, &rtvStart, TRUE, &dsvHandle);
 }
 
-void RenderingSystem::endGeometryPass(ID3D12GraphicsCommandList* cmdList) {
-    CD3DX12_RESOURCE_BARRIER barriers[GBuffer::mTexturesNum];
+void RenderingSystem::endGeometryPass(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* depthBuffer) {
+    CD3DX12_RESOURCE_BARRIER barriers[GBuffer::mTexturesNum + 1];
     for (int i = 0; i < GBuffer::mTexturesNum; ++i) {
         barriers[i] = CD3DX12_RESOURCE_BARRIER::Transition(mGBuffer->getResource(i), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_GENERIC_READ);
     }
-    cmdList->ResourceBarrier(GBuffer::mTexturesNum, barriers);
+
+    barriers[GBuffer::mTexturesNum] = CD3DX12_RESOURCE_BARRIER::Transition(depthBuffer,
+        D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_GENERIC_READ);
+
+    cmdList->ResourceBarrier(GBuffer::mTexturesNum + 1, barriers);
 }
 
 void RenderingSystem::beginLightingPass(ID3D12GraphicsCommandList* cmdList, D3D12_CPU_DESCRIPTOR_HANDLE backBufferRtv) {

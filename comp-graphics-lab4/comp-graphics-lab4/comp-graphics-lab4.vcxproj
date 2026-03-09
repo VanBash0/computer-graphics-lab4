@@ -138,6 +138,7 @@
     <ClCompile Include="gbuffer.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="model_loader.cpp" />
+    <ClCompile Include="rendering_system.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
