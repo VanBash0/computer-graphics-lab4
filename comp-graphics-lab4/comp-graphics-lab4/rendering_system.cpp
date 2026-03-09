@@ -29,6 +29,7 @@ void RenderingSystem::beginGeometryPass(ID3D12GraphicsCommandList* cmdList, D3D1
         cmdList->ClearRenderTargetView(rtvHandles[i], clearColor, 0, nullptr);
     }
 
+    cmdList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
     cmdList->OMSetRenderTargets(GBuffer::mTexturesNum, &rtvHandles[0], TRUE, &dsvHandle);
 }
 

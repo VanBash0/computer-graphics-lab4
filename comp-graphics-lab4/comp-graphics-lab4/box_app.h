@@ -7,6 +7,7 @@
 #include "upload_buffer.h"
 #include "model_loader.h"
 #include "texture.h"
+#include "rendering_system.h"
 
 #include <DirectXColors.h>
 #include <DirectXMath.h>
@@ -20,6 +21,12 @@ struct ObjectConstants {
     XMFLOAT4X4 TextureTransform;
     float TotalTime;
     XMFLOAT3 Padding;
+};
+
+struct PassConstants {
+    XMFLOAT4X4 InvViewProj;
+    XMFLOAT3 EyePosW;
+    float Padding = 0.0f;
 };
 
 class BoxApp : public D3DApp {
@@ -37,6 +44,7 @@ private:
     void buildBuffers();
     void buildConstantBuffer();
     void buildRootSignature();
+    void buildLightingRootSignature();
     void buildPso(const std::wstring& shaderName, ComPtr<ID3D12PipelineState>& pso);
     void initializeConstants();
     void loadTextures();
@@ -58,9 +66,13 @@ private:
     ComPtr<ID3D12Resource> mIndexBufferUploader;
 
     UploadBuffer<ObjectConstants>* mObjectCB = nullptr;
+    UploadBuffer<PassConstants>* mPassCB = nullptr;
+
     ComPtr<ID3D12RootSignature> mRootSignature;
+    ComPtr<ID3D12RootSignature> mLightingRootSignature;
     ComPtr<ID3D12PipelineState> mPSO;
     ComPtr<ID3D12PipelineState> mPSOColumn;
+    ComPtr<ID3D12PipelineState> mLightingPSO;
 
     ComPtr<ID3D12DescriptorHeap> mCbvSrvHeap;
     UINT mCbvSrvDescriptorSize = 0;
@@ -89,6 +101,7 @@ private:
     std::vector<Submesh> mSubmeshes;
     std::unordered_map<std::wstring, std::unique_ptr<Texture>> mTextures;
     ComPtr<ID3D12Resource> mDefaultTex = nullptr;
+    std::unique_ptr<RenderingSystem> mRenderingSystem;
 
     DirectX::XMFLOAT2 mTextureOffset = {0.0f, 0.0f};
     float mTextureScrollSpeedX = 0.0001f;
