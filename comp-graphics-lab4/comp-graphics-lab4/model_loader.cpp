@@ -49,7 +49,7 @@ void ModelLoader::parseMesh(const aiMesh* mesh, const aiMatrix4x4& transform, Me
 
         if (mesh->HasTextureCoords(0)) {
             vertex.texCoord.x = mesh->mTextureCoords[0][i].x;
-            vertex.texCoord.y = mesh->mTextureCoords[0][i].y;
+            vertex.texCoord.y = 1.0f - mesh->mTextureCoords[0][i].y;
         }
         else {
             vertex.texCoord = {0, 0};

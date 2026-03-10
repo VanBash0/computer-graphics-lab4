@@ -36,7 +36,7 @@ float4 PS(VertexOut pin) : SV_Target
     float2 uv = pin.TexC;
     float4 albedo = gAlbedoMap.Sample(gSampler, uv);
 
-    float ambientStrength = 0.25f;
+    float ambientStrength = 0.75f;
     float3 ambient = ambientStrength * albedo.rgb;
 
     return float4(ambient, albedo.a);
