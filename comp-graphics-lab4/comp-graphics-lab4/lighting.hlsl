@@ -46,6 +46,6 @@ float4 PS(VertexOut pin) : SV_Target
     float diff = max(dot(normalW, lightDir), 0.0f);
     float3 ambient = 0.15f * albedo.rgb;
 
-    return albedo;
+    //return albedo;
     return float4(ambient + (albedo.rgb * lightColor * diff), 1.0f);
 }
