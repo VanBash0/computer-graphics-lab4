@@ -26,11 +26,7 @@ struct ObjectConstants {
 struct PassConstants {
     XMFLOAT4X4 InvViewProj;
     XMFLOAT3 EyePosW;
-<<<<<<< Updated upstream
-    float cbPad;
-=======
     float Padding = 0.0f;
->>>>>>> Stashed changes
 };
 
 class BoxApp : public D3DApp {
@@ -48,12 +44,8 @@ private:
     void buildBuffers();
     void buildConstantBuffer();
     void buildRootSignature();
-<<<<<<< Updated upstream
-    void buildPso();
-=======
     void buildLightingRootSignature();
     void buildPso(const std::wstring& shaderName, ComPtr<ID3D12PipelineState>& pso);
->>>>>>> Stashed changes
     void initializeConstants();
     void loadTextures();
     void buildCbvSrvHeap();
@@ -64,7 +56,6 @@ private:
     void onMouseMove(WPARAM btnState, int x, int y) override;
 
     void createDefaultTexture();
-    void moveCamera(const GameTimer& gt);
 
     ComPtr<ID3D12Resource> mVertexBufferGPU;
     ComPtr<ID3D12Resource> mVertexBufferUploader;
@@ -75,29 +66,14 @@ private:
 
     UploadBuffer<ObjectConstants>* mObjectCB = nullptr;
     UploadBuffer<PassConstants>* mPassCB = nullptr;
-<<<<<<< Updated upstream
-    ComPtr<ID3D12RootSignature> mRootSignature;
-
-    std::unique_ptr<RenderingSystem> mRenderingSystem;
-    ComPtr<ID3D12DescriptorHeap> mGbufferRtvHeap;
-
-    CD3DX12_GPU_DESCRIPTOR_HANDLE mGbufferSrvHandle;
-
-    ComPtr<ID3D12PipelineState> mPsoGeometry;
-    ComPtr<ID3D12PipelineState> mPsoLighting;
-=======
 
     ComPtr<ID3D12RootSignature> mRootSignature;
     ComPtr<ID3D12RootSignature> mLightingRootSignature;
     ComPtr<ID3D12PipelineState> mPSO;
     ComPtr<ID3D12PipelineState> mLightingPSO;
->>>>>>> Stashed changes
 
     ComPtr<ID3D12DescriptorHeap> mCbvSrvHeap;
     UINT mCbvSrvDescriptorSize = 0;
-
-    UINT mDefaultTexIndex = 0;
-    ComPtr<ID3D12Resource> mDefaultTex;
 
     std::vector<D3D12_INPUT_ELEMENT_DESC> mInputLayout;
 
@@ -122,11 +98,8 @@ private:
 
     std::vector<Submesh> mSubmeshes;
     std::unordered_map<std::wstring, std::unique_ptr<Texture>> mTextures;
-<<<<<<< Updated upstream
-=======
     ComPtr<ID3D12Resource> mDefaultTex = nullptr;
     std::unique_ptr<RenderingSystem> mRenderingSystem;
->>>>>>> Stashed changes
 
 };
 

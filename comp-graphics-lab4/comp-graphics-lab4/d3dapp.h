@@ -107,8 +107,6 @@ protected:
     virtual void onMouseMove(WPARAM btnState, int x, int y) {};
     virtual void update(const GameTimer& gt) {};
     virtual void draw(const GameTimer& gt) {};
-
-    ID3D12Resource* getDepthStencilBuffer() const { return mDepthStencilBuffer.Get(); }
 };
 
 #endif // D3DAPP_H

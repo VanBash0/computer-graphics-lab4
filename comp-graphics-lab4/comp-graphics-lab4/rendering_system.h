@@ -17,8 +17,8 @@ public:
 
     void onResize(UINT newWidth, UINT newHeight);
     
-    void beginGeometryPass(ID3D12GraphicsCommandList* cmdList, D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle, ID3D12Resource* depthBuffer);
-    void endGeometryPass(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* depthBuffer);
+    void beginGeometryPass(ID3D12GraphicsCommandList* cmdList, D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle);
+    void endGeometryPass(ID3D12GraphicsCommandList* cmdList);
     void beginLightingPass(ID3D12GraphicsCommandList* cmdList, D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle);
 private:
     std::unique_ptr<GBuffer> mGBuffer;
