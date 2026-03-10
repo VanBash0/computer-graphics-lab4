@@ -32,9 +32,13 @@ void RenderingSystem::beginGeometryPass(ID3D12GraphicsCommandList* cmdList, D3D1
     }
 
     cmdList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
+<<<<<<< Updated upstream
 
     CD3DX12_CPU_DESCRIPTOR_HANDLE rtvStart = mGBuffer->getRtvHandle(0);
     cmdList->OMSetRenderTargets(GBuffer::mTexturesNum, &rtvStart, TRUE, &dsvHandle);
+=======
+    cmdList->OMSetRenderTargets(GBuffer::mTexturesNum, &rtvHandles[0], TRUE, &dsvHandle);
+>>>>>>> Stashed changes
 }
 
 void RenderingSystem::endGeometryPass(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* depthBuffer) {

@@ -33,6 +33,9 @@
     <ClCompile Include="model_loader.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="rendering_system.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="DDSTextureLoader.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>

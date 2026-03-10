@@ -26,7 +26,11 @@ struct ObjectConstants {
 struct PassConstants {
     XMFLOAT4X4 InvViewProj;
     XMFLOAT3 EyePosW;
+<<<<<<< Updated upstream
     float cbPad;
+=======
+    float Padding = 0.0f;
+>>>>>>> Stashed changes
 };
 
 class BoxApp : public D3DApp {
@@ -44,12 +48,16 @@ private:
     void buildBuffers();
     void buildConstantBuffer();
     void buildRootSignature();
+<<<<<<< Updated upstream
     void buildPso();
+=======
+    void buildLightingRootSignature();
+    void buildPso(const std::wstring& shaderName, ComPtr<ID3D12PipelineState>& pso);
+>>>>>>> Stashed changes
     void initializeConstants();
     void loadTextures();
     void buildCbvSrvHeap();
     void bindMaterialsToTextures();
-    void buildColumnPso();
 
     void update(const GameTimer& gt) override;
     void draw(const GameTimer& gt) override;
@@ -67,6 +75,7 @@ private:
 
     UploadBuffer<ObjectConstants>* mObjectCB = nullptr;
     UploadBuffer<PassConstants>* mPassCB = nullptr;
+<<<<<<< Updated upstream
     ComPtr<ID3D12RootSignature> mRootSignature;
 
     std::unique_ptr<RenderingSystem> mRenderingSystem;
@@ -76,6 +85,13 @@ private:
 
     ComPtr<ID3D12PipelineState> mPsoGeometry;
     ComPtr<ID3D12PipelineState> mPsoLighting;
+=======
+
+    ComPtr<ID3D12RootSignature> mRootSignature;
+    ComPtr<ID3D12RootSignature> mLightingRootSignature;
+    ComPtr<ID3D12PipelineState> mPSO;
+    ComPtr<ID3D12PipelineState> mLightingPSO;
+>>>>>>> Stashed changes
 
     ComPtr<ID3D12DescriptorHeap> mCbvSrvHeap;
     UINT mCbvSrvDescriptorSize = 0;
@@ -106,10 +122,12 @@ private:
 
     std::vector<Submesh> mSubmeshes;
     std::unordered_map<std::wstring, std::unique_ptr<Texture>> mTextures;
+<<<<<<< Updated upstream
+=======
+    ComPtr<ID3D12Resource> mDefaultTex = nullptr;
+    std::unique_ptr<RenderingSystem> mRenderingSystem;
+>>>>>>> Stashed changes
 
-    DirectX::XMFLOAT2 mTextureOffset = {0.0f, 0.0f};
-    float mTextureScrollSpeedX = 0.0001f;
-    float mTextureScrollSpeedY = 0.0001f;
 };
 
 #endif // BOX_APP_H

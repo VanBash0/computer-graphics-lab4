@@ -20,26 +20,32 @@ struct VertexIn
 struct VertexOut
 {
     float4 PosH: SV_POSITION;
-    float3 PosW: POSITION;
     float3 NormalW: NORMAL;
     float2 TexC: TEXCOORD;
+};
+
+struct GBufferOut
+{
+    float4 Albedo : SV_Target0;
+    float4 Normal : SV_Target1;
+    float Depth : SV_Target2;
 };
 
 VertexOut VS(VertexIn vin)
 {
     VertexOut vout;
-    
+
     float speed = 4.f;
     float frequency = .5f;
     float amplitude = 2.f;
-    
+
     float swing = sin(gTotalTime * speed + vin.PosL.y * frequency) * amplitude;
     float3 newPos = vin.PosL;
     newPos.x += swing * (vin.PosL.y * 0.1f);
 
-    vout.PosW = mul(float4(newPos, 1.0f), gWorld).xyz;
+    float4 posW = mul(float4(newPos, 1.0f), gWorld);
     vout.NormalW = mul(vin.NormalL, (float3x3)gWorld);
-    vout.PosH = mul(float4(newPos, 1.0f), gWorldViewProj);
+    vout.PosH = mul(posW, gWorldViewProj);
 
     float4 texC = mul(float4(vin.TexC, 0.0f, 1.0f), gTexTransform);
     vout.TexC = texC.xy;
@@ -47,26 +53,15 @@ VertexOut VS(VertexIn vin)
     return vout;
 }
 
-float4 PS(VertexOut pin) : SV_Target
+GBufferOut PS(VertexOut pin)
 {
+    GBufferOut gout;
     float3 normalW = normalize(pin.NormalW);
 
-    float3 lightPos = float3(0.0f, 5.0f, -5.0f);
-    float3 lightDir = normalize(lightPos - pin.PosW);
-    float3 eyePos = float3(0.0f, 0.0f, -5.0f);
-    float3 viewDir = normalize(eyePos - pin.PosW);
-
     float4 texColor = gDiffuseMap.Sample(gSampler, pin.TexC);
-    float3 objectColor = texColor.rgb;
+    gout.Albedo = texColor;
+    gout.Normal = float4(normalW * 0.5f + 0.5f, 1.0f);
+    gout.Depth = pin.PosH.z / pin.PosH.w;
 
-    float3 ambient = 0.2f * objectColor;
-
-    float diff = max(dot(normalW, lightDir), 0.0f);
-    float3 diffuse = diff * objectColor;
-
-    float3 reflectDir = reflect(-lightDir, normalW);
-    float spec = pow(max(dot(viewDir, reflectDir), 0.0f), 32.0f);
-    float3 specular = spec * float3(1.0f, 1.0f, 1.0f);
-
-    return float4(ambient + diffuse + specular, texColor.a);
+    return gout;
 }
