@@ -1,6 +1,7 @@
-#include "d3dapp.h"
+﻿#include "d3dapp.h"
 #include "d3dx12.h"
 #include "fail_checker.h"
+#include "gbuffer.h"
 #include <cassert>
 #include <windowsx.h>
 #include "vertex.h"
@@ -99,7 +100,7 @@ void D3DApp::createSwapChain() {
 
 void D3DApp::createDescriptorHeaps() {
     D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc = {};
-    rtvHeapDesc.NumDescriptors = swapChainBufferCount;
+    rtvHeapDesc.NumDescriptors = swapChainBufferCount + GBuffer::mTexturesNum;
     rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
     rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
     rtvHeapDesc.NodeMask = 0;

@@ -138,8 +138,10 @@
     <ClCompile Include="gbuffer.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="model_loader.cpp" />
+    <ClCompile Include="rendering_system.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="lighting_shader.hlsl" />
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
