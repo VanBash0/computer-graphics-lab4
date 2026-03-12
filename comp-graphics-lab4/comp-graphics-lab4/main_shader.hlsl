@@ -53,7 +53,7 @@ GBufferOut PS(VertexOut pin)
     float4 texColor = gDiffuseMap.Sample(gSampler, pin.TexC);
     gout.Albedo = texColor;
     gout.Normal = float4(normalW * 0.5f + 0.5f, 1.0f);
-    gout.Depth = pin.PosH.z / pin.PosH.w;
+    gout.Depth = pin.PosH.z;
 
     return gout;
 }

@@ -27,6 +27,35 @@ struct PassConstants {
     XMFLOAT4X4 InvViewProj;
     XMFLOAT3 EyePosW;
     float Padding = 0.0f;
+    XMFLOAT4 AmbientColor;
+};
+
+enum class LightType : UINT {
+    Point = 0,
+    Directional = 1,
+    Spot = 2
+};
+
+constexpr UINT MAX_LIGHTS = 16;
+
+struct LightData {
+    XMFLOAT3 Position = { 0.0f, 0.0f, 0.0f };
+    float Range = 1.0f;
+
+    XMFLOAT3 Color = { 1.0f, 1.0f, 1.0f };
+    float Intensity = 1.0f;
+
+    XMFLOAT3 Direction = { 0.0f, -1.0f, 0.0f };
+    UINT Type = static_cast<UINT>(LightType::Point);
+
+    XMFLOAT3 Attenuation = { 1.0f, 0.0f, 1.0f };
+    float SpotAngle = 0.0f;
+};
+
+struct LightingConstants {
+    UINT LightCount = 0;
+    XMFLOAT3 Padding = { 0.0f, 0.0f, 0.0f };
+    LightData Lights[MAX_LIGHTS];
 };
 
 class BoxApp : public D3DApp {
@@ -66,6 +95,7 @@ private:
 
     UploadBuffer<ObjectConstants>* mObjectCB = nullptr;
     UploadBuffer<PassConstants>* mPassCB = nullptr;
+    UploadBuffer<LightingConstants>* mLightingCB = nullptr;
 
     ComPtr<ID3D12RootSignature> mRootSignature;
     ComPtr<ID3D12RootSignature> mLightingRootSignature;
@@ -97,6 +127,7 @@ private:
     D3D12_INDEX_BUFFER_VIEW mIndexBufferView;
 
     std::vector<Submesh> mSubmeshes;
+    std::vector<LightData> mLights;
     std::unordered_map<std::wstring, std::unique_ptr<Texture>> mTextures;
     ComPtr<ID3D12Resource> mDefaultTex = nullptr;
     std::unique_ptr<RenderingSystem> mRenderingSystem;
