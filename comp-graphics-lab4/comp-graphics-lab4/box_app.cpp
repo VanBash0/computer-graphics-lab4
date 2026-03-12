@@ -80,6 +80,7 @@ void BoxApp::buildConstantBuffer()
 {
     mObjectCB = new UploadBuffer<ObjectConstants>(md3dDevice.Get(), 2, true);
     mPassCB = new UploadBuffer<PassConstants>(md3dDevice.Get(), 1, true);
+    mLightingCB = new UploadBuffer<LightingConstants>(md3dDevice.Get(), 1, true);
 }
 
 void BoxApp::update(const GameTimer& gt)
@@ -146,10 +147,18 @@ void BoxApp::update(const GameTimer& gt)
     XMMATRIX viewProj = view * proj;
     XMMATRIX invViewProj = XMMatrixInverse(nullptr, viewProj);
 
-    PassConstants passConstants;
+    PassConstants passConstants = {};
     XMStoreFloat4x4(&passConstants.InvViewProj, XMMatrixTranspose(invViewProj));
     passConstants.EyePosW = mEyePos;
+    passConstants.AmbientColor = XMFLOAT4(0.08f, 0.08f, 0.1f, 1.0f);
     mPassCB->copyData(0, passConstants);
+
+    LightingConstants lightingConstants = {};
+    lightingConstants.LightCount = static_cast<UINT>(std::min(mLights.size(), static_cast<size_t>(MAX_LIGHTS)));
+    for (UINT i = 0; i < lightingConstants.LightCount; ++i) {
+        lightingConstants.Lights[i] = mLights[i];
+    }
+    mLightingCB->copyData(0, lightingConstants);
 }
 
 BoxApp::~BoxApp()
@@ -159,6 +168,9 @@ BoxApp::~BoxApp()
 
     delete mPassCB;
     mPassCB = nullptr;
+
+    delete mLightingCB;
+    mLightingCB = nullptr;
 }
 
 void BoxApp::onMouseMove(WPARAM btnState, int x, int y) {
@@ -189,6 +201,26 @@ void BoxApp::initializeConstants() {
     XMStoreFloat4x4(&mWorld, XMMatrixIdentity());
     XMStoreFloat4x4(&mView, XMMatrixIdentity());
     XMStoreFloat4x4(&mProj, XMMatrixIdentity());
+
+    mLights.clear();
+
+    LightData keyLight;
+    keyLight.Type = static_cast<UINT>(LightType::Point);
+    keyLight.Position = XMFLOAT3(-6.0f, 7.0f, -4.0f);
+    keyLight.Color = XMFLOAT3(1.0f, 0.92f, 0.8f);
+    keyLight.Intensity = 20.0f;
+    keyLight.Range = 40.0f;
+    keyLight.Attenuation = XMFLOAT3(1.0f, 0.09f, 0.032f);
+    mLights.push_back(keyLight);
+
+    LightData fillLight;
+    fillLight.Type = static_cast<UINT>(LightType::Point);
+    fillLight.Position = XMFLOAT3(7.0f, 4.0f, 5.0f);
+    fillLight.Color = XMFLOAT3(0.65f, 0.75f, 1.0f);
+    fillLight.Intensity = 14.0f;
+    fillLight.Range = 34.0f;
+    fillLight.Attenuation = XMFLOAT3(1.0f, 0.14f, 0.07f);
+    mLights.push_back(fillLight);
 }
 
 void BoxApp::draw(const GameTimer& gt)
@@ -244,6 +276,9 @@ void BoxApp::draw(const GameTimer& gt)
     CD3DX12_GPU_DESCRIPTOR_HANDLE gbufferSrvHandle = mRenderingSystem->getGBuffer()->getSrvHandle();
     mCommandList->SetGraphicsRootDescriptorTable(1, gbufferSrvHandle);
 
+    CD3DX12_GPU_DESCRIPTOR_HANDLE lightingCbvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart(), 3, mCbvSrvDescriptorSize);
+    mCommandList->SetGraphicsRootDescriptorTable(2, lightingCbvHandle);
+
     mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     mCommandList->DrawInstanced(3, 1, 0, 0);
 
@@ -297,7 +332,6 @@ void BoxApp::buildRootSignature() {
         IID_PPV_ARGS(&mRootSignature)));
 }
 
-
 void BoxApp::buildLightingRootSignature() {
     CD3DX12_DESCRIPTOR_RANGE cbvRange;
     cbvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0);
@@ -305,9 +339,13 @@ void BoxApp::buildLightingRootSignature() {
     CD3DX12_DESCRIPTOR_RANGE gbufferSrvRange;
     gbufferSrvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, GBuffer::mTexturesNum, 0);
 
-    CD3DX12_ROOT_PARAMETER slotRootParameter[2];
+    CD3DX12_DESCRIPTOR_RANGE lightingCbvRange;
+    lightingCbvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 1);
+
+    CD3DX12_ROOT_PARAMETER slotRootParameter[3];
     slotRootParameter[0].InitAsDescriptorTable(1, &cbvRange, D3D12_SHADER_VISIBILITY_PIXEL);
     slotRootParameter[1].InitAsDescriptorTable(1, &gbufferSrvRange, D3D12_SHADER_VISIBILITY_PIXEL);
+    slotRootParameter[2].InitAsDescriptorTable(1, &lightingCbvRange, D3D12_SHADER_VISIBILITY_PIXEL);
 
     CD3DX12_STATIC_SAMPLER_DESC staticSampler(0,
         D3D12_FILTER_MIN_MAG_MIP_LINEAR,
@@ -315,7 +353,7 @@ void BoxApp::buildLightingRootSignature() {
         D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
         D3D12_TEXTURE_ADDRESS_MODE_CLAMP);
 
-    CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(2, slotRootParameter, 1, &staticSampler,
+    CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(3, slotRootParameter, 1, &staticSampler,
         D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
     ComPtr<ID3DBlob> serializedRootSig;
@@ -415,7 +453,7 @@ void BoxApp::loadTextures() {
 
 void BoxApp::buildCbvSrvHeap() {
     UINT numTextures = static_cast<UINT>(mTextures.size());
-    UINT numDescriptors = 3 + GBuffer::mTexturesNum + numTextures;
+    UINT numDescriptors = 4 + GBuffer::mTexturesNum + numTextures;
 
     D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
     heapDesc.NumDescriptors = numDescriptors;
@@ -442,16 +480,21 @@ void BoxApp::buildCbvSrvHeap() {
     cbvDesc.SizeInBytes = D3DUtil::calcConstantBufferByteSize(sizeof(PassConstants));
     md3dDevice->CreateConstantBufferView(&cbvDesc, handle);
 
+    handle.Offset(1, mCbvSrvDescriptorSize);
+    cbvDesc.BufferLocation = mLightingCB->getResource()->GetGPUVirtualAddress();
+    cbvDesc.SizeInBytes = D3DUtil::calcConstantBufferByteSize(sizeof(LightingConstants));
+    md3dDevice->CreateConstantBufferView(&cbvDesc, handle);
+
     mRenderingSystem = std::make_unique<RenderingSystem>(md3dDevice.Get(), mClientWidth, mClientHeight);
 
-    CD3DX12_CPU_DESCRIPTOR_HANDLE gbufferSrvStart(mCbvSrvHeap->GetCPUDescriptorHandleForHeapStart(), 3, mCbvSrvDescriptorSize);
-    CD3DX12_GPU_DESCRIPTOR_HANDLE gbufferGpuSrvStart(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart(), 3, mCbvSrvDescriptorSize);
+    CD3DX12_CPU_DESCRIPTOR_HANDLE gbufferSrvStart(mCbvSrvHeap->GetCPUDescriptorHandleForHeapStart(), 4, mCbvSrvDescriptorSize);
+    CD3DX12_GPU_DESCRIPTOR_HANDLE gbufferGpuSrvStart(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart(), 4, mCbvSrvDescriptorSize);
 
     CD3DX12_CPU_DESCRIPTOR_HANDLE gbufferRtvStart(mRtvHeap->GetCPUDescriptorHandleForHeapStart(), swapChainBufferCount, mRtvDescriptorSize);
 
     mRenderingSystem->buildDescriptors(gbufferSrvStart, gbufferGpuSrvStart, gbufferRtvStart, mCbvSrvDescriptorSize, mRtvDescriptorSize);
 
-    handle.Offset(1, mCbvSrvDescriptorSize);
+    handle.Offset(1 + GBuffer::mTexturesNum, mCbvSrvDescriptorSize);
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
     srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -460,7 +503,7 @@ void BoxApp::buildCbvSrvHeap() {
     srvDesc.Texture2D.MipLevels = 1;
     md3dDevice->CreateShaderResourceView(mDefaultTex.Get(), &srvDesc, handle);
 
-    UINT i = 3 + GBuffer::mTexturesNum;
+    UINT i = 4 + GBuffer::mTexturesNum;
     for (auto& kv : mTextures) {
         Texture* texture = kv.second.get();
         srvDesc.Format = texture->resource->GetDesc().Format;
@@ -478,11 +521,11 @@ void BoxApp::bindMaterialsToTextures() {
     for (auto& submesh : mSubmeshes) {
         const std::string& texName = submesh.material.diffuseTextureName;
         if (texName.empty()) {
-            submesh.material.diffuseSrvHeapIndex = 3 + GBuffer::mTexturesNum;
+            submesh.material.diffuseSrvHeapIndex = 4 + GBuffer::mTexturesNum;
             continue;
         }
         auto it = mTextures.find(std::wstring(texName.begin(), texName.end()));
-        submesh.material.diffuseSrvHeapIndex = (it != mTextures.end()) ? it->second->srvHeapIndex : (3 + GBuffer::mTexturesNum);
+        submesh.material.diffuseSrvHeapIndex = (it != mTextures.end()) ? it->second->srvHeapIndex : (4 + GBuffer::mTexturesNum);
     }
 }
 
