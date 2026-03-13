@@ -226,20 +226,29 @@ void BoxApp::initializeConstants() {
     LightData keyLight;
     keyLight.Type = static_cast<UINT>(LightType::Point);
     keyLight.Position = XMFLOAT3(-6.0f, 7.0f, -4.0f);
-    keyLight.Color = XMFLOAT3(1.0f, 0.92f, 0.8f);
-    keyLight.Intensity = 20.0f;
-    keyLight.Range = 40.0f;
+    keyLight.Color = XMFLOAT3(0.47f, 0.97f, 0.97f);
+    keyLight.Intensity = 10.0f;
+    keyLight.Range = 10.0f;
     keyLight.Attenuation = XMFLOAT3(1.0f, 0.09f, 0.032f);
     mLights.push_back(keyLight);
 
-    LightData fillLight;
-    fillLight.Type = static_cast<UINT>(LightType::Point);
-    fillLight.Position = XMFLOAT3(7.0f, 4.0f, 5.0f);
-    fillLight.Color = XMFLOAT3(0.65f, 0.75f, 1.0f);
-    fillLight.Intensity = 14.0f;
-    fillLight.Range = 34.0f;
-    fillLight.Attenuation = XMFLOAT3(1.0f, 0.14f, 0.07f);
-    mLights.push_back(fillLight);
+    LightData directionalLight;
+    directionalLight.Type = static_cast<UINT>(LightType::Directional);
+    directionalLight.Direction = XMFLOAT3(-0.35f, -1.0f, -0.2f);
+    directionalLight.Color = XMFLOAT3(0.85f, 0.9f, 1.0f);
+    directionalLight.Intensity = 1.25f;
+    mLights.push_back(directionalLight);
+
+    LightData spotLight;
+    spotLight.Type = static_cast<UINT>(LightType::Spot);
+    spotLight.Position = XMFLOAT3(0.0f, 6.0f, -3.0f);
+    spotLight.Direction = XMFLOAT3(0.0f, -0.95f, 0.3f);
+    spotLight.Color = XMFLOAT3(1.0f, 0.85f, 0.7f);
+    spotLight.Intensity = 40.0f;
+    spotLight.Range = 45.0f;
+    spotLight.Attenuation = XMFLOAT3(1.0f, 0.09f, 0.032f);
+    spotLight.SpotAngle = XMConvertToRadians(42.0f);
+    mLights.push_back(spotLight);
 }
 
 void BoxApp::draw(const GameTimer& gt)
