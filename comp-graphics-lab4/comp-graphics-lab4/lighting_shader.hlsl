@@ -99,11 +99,65 @@ float3 evaluatePointLight(LightData light, float3 worldPos, float3 normalW)
     return light.Color * light.Intensity * ndotl * attenuation;
 }
 
+float3 evaluateDirectionalLight(LightData light, float3 normalW)
+{
+    float3 lightDirection = normalize(light.Direction);
+    float3 toLight = -lightDirection;
+    float ndotl = saturate(dot(normalW, toLight));
+    if (ndotl <= 0.0f)
+    {
+        return 0.0f;
+    }
+
+    return light.Color * light.Intensity * ndotl;
+}
+
+float3 evaluateSpotLight(LightData light, float3 worldPos, float3 normalW)
+{
+    float3 toLight = light.Position - worldPos;
+    float distanceToLight = length(toLight);
+    if (distanceToLight >= light.Range)
+    {
+        return 0.0f;
+    }
+
+    float3 lightDir = toLight / max(distanceToLight, 0.0001f);
+    float ndotl = saturate(dot(normalW, lightDir));
+    if (ndotl <= 0.0f)
+    {
+        return 0.0f;
+    }
+
+    float3 spotDirection = normalize(light.Direction);
+    float3 lightToSurface = normalize(worldPos - light.Position);
+    float cosTheta = dot(lightToSurface, spotDirection);
+    float cosOuter = cos(light.SpotAngle * 0.5f);
+    float cosInner = cos(light.SpotAngle * 0.35f);
+    float spotFactor = saturate((cosTheta - cosOuter) / max(cosInner - cosOuter, 0.0001f));
+    if (spotFactor <= 0.0f)
+    {
+        return 0.0f;
+    }
+
+    float attenuation = computeAttenuation(light, distanceToLight);
+    return light.Color * light.Intensity * ndotl * attenuation * spotFactor * spotFactor;
+}
+
 float3 evaluateLight(LightData light, float3 worldPos, float3 normalW)
 {
     if (light.Type == LIGHT_TYPE_POINT)
     {
         return evaluatePointLight(light, worldPos, normalW);
+    }
+    
+    if (light.Type == LIGHT_TYPE_DIRECTIONAL)
+    {
+        return evaluateDirectionalLight(light, normalW);
+    }
+
+    if (light.Type == LIGHT_TYPE_SPOT)
+    {
+        return evaluateSpotLight(light, worldPos, normalW);
     }
 
     return 0.0f;
