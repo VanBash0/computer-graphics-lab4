@@ -62,7 +62,7 @@ VertexOut VS(uint vid : SV_VertexID)
 
 float3 reconstructWorldPosition(float2 uv, float depth)
 {
-    float2 ndcXY = uv * 2.0f - 1.0f;
+    float2 ndcXY = float2(uv.x * 2.0f - 1.0f, 1.0f - uv.y * 2.0f);
     float4 clipPos = float4(ndcXY, depth, 1.0f);
     float4 worldPos = mul(clipPos, gInvViewProj);
     return worldPos.xyz / worldPos.w;

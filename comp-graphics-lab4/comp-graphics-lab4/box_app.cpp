@@ -207,9 +207,9 @@ void BoxApp::initializeConstants() {
     LightData keyLight;
     keyLight.Type = static_cast<UINT>(LightType::Point);
     keyLight.Position = XMFLOAT3(-6.0f, 7.0f, -4.0f);
-    keyLight.Color = XMFLOAT3(1.0f, 0.92f, 0.8f);
-    keyLight.Intensity = 20.0f;
-    keyLight.Range = 40.0f;
+    keyLight.Color = XMFLOAT3(0.47f, 0.97f, 0.97f);
+    keyLight.Intensity = 10.0f;
+    keyLight.Range = 10.0f;
     keyLight.Attenuation = XMFLOAT3(1.0f, 0.09f, 0.032f);
     mLights.push_back(keyLight);
 
