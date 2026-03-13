@@ -59,7 +59,7 @@ VertexOut VS(VertexIn vin)
 
     animatedTexC.x += gTotalTime * texScrollSpeed * textureAnimEnabled;
     animatedTexC.y += sin(gTotalTime * speed + vin.PosL.y * texWaveFrequency) * texWaveAmplitude * textureAnimEnabled;
-    vout.TexC = (textureAnimEnabled > 0.5f) ? frac(animatedTexC) : animatedTexC;
+    vout.TexC = animatedTexC;
 
     return vout;
 }
