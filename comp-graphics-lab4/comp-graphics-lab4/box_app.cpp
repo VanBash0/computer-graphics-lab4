@@ -13,6 +13,12 @@
 #include <filesystem>
 #include <unordered_map>
 
+namespace {
+    bool isColumnSubmesh(const Submesh& submesh) {
+        return submesh.material.diffuseTextureName.find("column") != std::string::npos;
+    }
+}
+
 void BoxApp::buildResources() {
     initializeConstants();
 
@@ -25,6 +31,7 @@ void BoxApp::buildResources() {
     buildCbvSrvHeap();
     bindMaterialsToTextures();
     buildPso(L"main_shader.hlsl", mPSO);
+    buildPso(L"column_shader.hlsl", mColumnPSO);
     buildPso(L"lighting_shader.hlsl", mLightingPSO);
     failCheck(mCommandList->Close());
 
@@ -85,6 +92,13 @@ void BoxApp::buildConstantBuffer()
 
 void BoxApp::update(const GameTimer& gt)
 {
+    if (GetAsyncKeyState('1') & 0x0001) {
+        mEnableColumnVertexAnimation = !mEnableColumnVertexAnimation;
+    }
+    if (GetAsyncKeyState('2') & 0x0001) {
+        mEnableColumnTextureAnimation = !mEnableColumnTextureAnimation;
+    }
+
     float dt = gt.getDeltaTime();
     float speed = SPEED_FACTOR * dt;
 
@@ -127,20 +141,25 @@ void BoxApp::update(const GameTimer& gt)
     XMMATRIX proj = XMLoadFloat4x4(&mProj);
     XMMATRIX worldViewProj = world * view * proj;
 
-    ObjectConstants objConstantsNoAnim;
+    ObjectConstants objConstantsNoAnim = {};
     XMStoreFloat4x4(&objConstantsNoAnim.WorldViewProj, XMMatrixTranspose(worldViewProj));
     XMStoreFloat4x4(&objConstantsNoAnim.World, XMMatrixTranspose(world));
 
     XMMATRIX texScale = XMMatrixScaling(TEXTURE_SCALE.x, TEXTURE_SCALE.y, TEXTURE_SCALE.z);
     XMStoreFloat4x4(&objConstantsNoAnim.TextureTransform, XMMatrixTranspose(texScale));
 
+    objConstantsNoAnim.TotalTime = gt.getTotalTime();
+    objConstantsNoAnim.Padding = XMFLOAT3(mEnableColumnVertexAnimation ? 1.0f : 0.0f,
+        mEnableColumnTextureAnimation ? 1.0f : 0.0f, 0.0f);
+
     mObjectCB->copyData(0, objConstantsNoAnim);
 
-    ObjectConstants objConstantsStatic;
+    ObjectConstants objConstantsStatic = {};
     XMStoreFloat4x4(&objConstantsStatic.WorldViewProj, XMMatrixTranspose(worldViewProj));
     XMStoreFloat4x4(&objConstantsStatic.World, XMMatrixTranspose(world));
     XMStoreFloat4x4(&objConstantsStatic.TextureTransform, XMMatrixTranspose(texScale));
     objConstantsStatic.TotalTime = 0.0f;
+    objConstantsStatic.Padding = XMFLOAT3(0.0f, 0.0f, 0.0f);
 
     mObjectCB->copyData(1, objConstantsStatic);
 
@@ -247,12 +266,15 @@ void BoxApp::draw(const GameTimer& gt)
     mCommandList->IASetVertexBuffers(0, 1, &mVertexBufferView);
     mCommandList->IASetIndexBuffer(&mIndexBufferView);
 
-    mCommandList->SetPipelineState(mPSO.Get());
-
-    CD3DX12_GPU_DESCRIPTOR_HANDLE cbvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart());
-    mCommandList->SetGraphicsRootDescriptorTable(0, cbvHandle);
-
     for (const auto& submesh : mSubmeshes) {
+        const bool isColumn = isColumnSubmesh(submesh);
+
+        mCommandList->SetPipelineState(isColumn ? mColumnPSO.Get() : mPSO.Get());
+
+        CD3DX12_GPU_DESCRIPTOR_HANDLE cbvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart());
+        cbvHandle.Offset(isColumn ? 0 : 1, mCbvSrvDescriptorSize);
+        mCommandList->SetGraphicsRootDescriptorTable(0, cbvHandle);
+
         CD3DX12_GPU_DESCRIPTOR_HANDLE srvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart());
         srvHandle.Offset(submesh.material.diffuseSrvHeapIndex, mCbvSrvDescriptorSize);
         mCommandList->SetGraphicsRootDescriptorTable(1, srvHandle);

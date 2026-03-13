@@ -39,7 +39,10 @@ VertexOut VS(VertexIn vin)
     float frequency = .5f;
     float amplitude = 2.f;
 
-    float swing = sin(gTotalTime * speed + vin.PosL.y * frequency) * amplitude;
+    float vertexAnimEnabled = gPadding.x;
+    float textureAnimEnabled = gPadding.y;
+
+    float swing = sin(gTotalTime * speed + vin.PosL.y * frequency) * amplitude * vertexAnimEnabled;
     float3 newPos = vin.PosL;
     newPos.x += swing * (vin.PosL.y * 0.1f);
 
@@ -48,7 +51,15 @@ VertexOut VS(VertexIn vin)
     vout.PosH = mul(posW, gWorldViewProj);
 
     float4 texC = mul(float4(vin.TexC, 0.0f, 1.0f), gTexTransform);
-    vout.TexC = texC.xy;
+    float2 animatedTexC = texC.xy;
+
+    float texScrollSpeed = 0.08f;
+    float texWaveFrequency = 1.2f;
+    float texWaveAmplitude = 0.02f;
+
+    animatedTexC.x += gTotalTime * texScrollSpeed * textureAnimEnabled;
+    animatedTexC.y += sin(gTotalTime * speed + vin.PosL.y * texWaveFrequency) * texWaveAmplitude * textureAnimEnabled;
+    vout.TexC = (textureAnimEnabled > 0.5f) ? frac(animatedTexC) : animatedTexC;
 
     return vout;
 }

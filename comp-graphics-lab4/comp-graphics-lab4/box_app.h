@@ -100,6 +100,7 @@ private:
     ComPtr<ID3D12RootSignature> mRootSignature;
     ComPtr<ID3D12RootSignature> mLightingRootSignature;
     ComPtr<ID3D12PipelineState> mPSO;
+    ComPtr<ID3D12PipelineState> mColumnPSO;
     ComPtr<ID3D12PipelineState> mLightingPSO;
 
     ComPtr<ID3D12DescriptorHeap> mCbvSrvHeap;
@@ -132,6 +133,8 @@ private:
     ComPtr<ID3D12Resource> mDefaultTex = nullptr;
     std::unique_ptr<RenderingSystem> mRenderingSystem;
 
+    bool mEnableColumnVertexAnimation = true;
+    bool mEnableColumnTextureAnimation = true;
 };
 
 #endif // BOX_APP_H
