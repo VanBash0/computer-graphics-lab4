@@ -223,32 +223,30 @@ void BoxApp::initializeConstants() {
 
     mLights.clear();
 
-    LightData keyLight;
-    keyLight.Type = static_cast<UINT>(LightType::Point);
-    keyLight.Position = XMFLOAT3(-6.0f, 7.0f, -4.0f);
-    keyLight.Color = XMFLOAT3(0.47f, 0.97f, 0.97f);
-    keyLight.Intensity = 10.0f;
-    keyLight.Range = 10.0f;
-    keyLight.Attenuation = XMFLOAT3(1.0f, 0.09f, 0.032f);
-    mLights.push_back(keyLight);
+    LightData redPointLight;
+    redPointLight.Type = static_cast<UINT>(LightType::Point);
+    redPointLight.Position = XMFLOAT3(-1.6f, 2.8f, -1.2f);
+    redPointLight.Color = XMFLOAT3(1.0f, 0.0f, 0.0f);
+    redPointLight.Intensity = 15.0f;
+    redPointLight.Range = 10.0f;
+    redPointLight.Attenuation = XMFLOAT3(1.0f, 0.09f, 0.032f);
+    mLights.push_back(redPointLight);
 
-    LightData directionalLight;
-    directionalLight.Type = static_cast<UINT>(LightType::Directional);
-    directionalLight.Direction = XMFLOAT3(-0.35f, -1.0f, -0.2f);
-    directionalLight.Color = XMFLOAT3(0.85f, 0.9f, 1.0f);
-    directionalLight.Intensity = 1.25f;
-    mLights.push_back(directionalLight);
+    LightData bluePointLight;
+    bluePointLight.Type = static_cast<UINT>(LightType::Point);
+    bluePointLight.Position = XMFLOAT3(1.6f, 2.8f, -1.2f);
+    bluePointLight.Color = XMFLOAT3(0.0f, 0.0f, 1.0f);
+    bluePointLight.Intensity = 15.0f;
+    bluePointLight.Range = 10.0f;
+    bluePointLight.Attenuation = XMFLOAT3(1.0f, 0.09f, 0.032f);
+    mLights.push_back(bluePointLight);
 
-    LightData spotLight;
-    spotLight.Type = static_cast<UINT>(LightType::Spot);
-    spotLight.Position = XMFLOAT3(0.0f, 6.0f, -3.0f);
-    spotLight.Direction = XMFLOAT3(0.0f, -0.95f, 0.3f);
-    spotLight.Color = XMFLOAT3(1.0f, 0.85f, 0.7f);
-    spotLight.Intensity = 40.0f;
-    spotLight.Range = 45.0f;
-    spotLight.Attenuation = XMFLOAT3(1.0f, 0.09f, 0.032f);
-    spotLight.SpotAngle = XMConvertToRadians(42.0f);
-    mLights.push_back(spotLight);
+    LightData directionalFill;
+    directionalFill.Type = static_cast<UINT>(LightType::Directional);
+    directionalFill.Direction = XMFLOAT3(-0.35f, -1.0f, -0.2f);
+    directionalFill.Color = XMFLOAT3(0.8f, 0.85f, 1.0f);
+    directionalFill.Intensity = 0.25f;
+    mLights.push_back(directionalFill);
 }
 
 void BoxApp::draw(const GameTimer& gt)

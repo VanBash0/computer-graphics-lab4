@@ -163,6 +163,17 @@ float3 evaluateLight(LightData light, float3 worldPos, float3 normalW)
     return 0.0f;
 }
 
+
+float3 applyToneMapping(float3 color)
+{
+    return color / (1.0f + color);
+}
+
+float3 applyGammaCorrection(float3 color)
+{
+    return pow(saturate(color), 1.0f / 2.2f);
+}
+
 float4 PS(VertexOut pin) : SV_Target
 {
     float2 uv = pin.TexC;
@@ -176,10 +187,14 @@ float4 PS(VertexOut pin) : SV_Target
 
     float3 lighting = gAmbientColor.rgb;
     [loop]
-    for (uint i = 0; i < gLightCount; ++i)
+    for (uint i = 0; i < min(gLightCount, MAX_LIGHTS); ++i)
     {
         lighting += evaluateLight(gLights[i], worldPos, normalW);
     }
 
-    return float4(albedo.rgb * lighting, albedo.a);
+    float3 litColor = albedo.rgb * lighting;
+    litColor = applyToneMapping(litColor);
+    litColor = applyGammaCorrection(litColor);
+
+    return float4(litColor, albedo.a);
 }
