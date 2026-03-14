@@ -58,6 +58,13 @@ struct LightingConstants {
     LightData Lights[MAX_LIGHTS];
 };
 
+struct SwingingSpotLight {
+    LightData Light;
+    XMFLOAT3 AnchorPosition = { 0.0f, 0.0f, 0.0f };
+    float SpawnTime = 0.0f;
+    float PhaseOffset = 0.0f;
+};
+
 class BoxApp : public D3DApp {
 public:
     void buildResources();
@@ -129,6 +136,7 @@ private:
 
     std::vector<Submesh> mSubmeshes;
     std::vector<LightData> mLights;
+    std::vector<SwingingSpotLight> mSwingingSpotLights;
     std::unordered_map<std::wstring, std::unique_ptr<Texture>> mTextures;
     ComPtr<ID3D12Resource> mDefaultTex = nullptr;
     std::unique_ptr<RenderingSystem> mRenderingSystem;

@@ -10,6 +10,7 @@
 
 #include <DirectXColors.h>
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <unordered_map>
 
@@ -90,8 +91,64 @@ void BoxApp::buildConstantBuffer()
     mLightingCB = new UploadBuffer<LightingConstants>(md3dDevice.Get(), 1, true);
 }
 
-void BoxApp::update(const GameTimer& gt)
-{
+void BoxApp::update(const GameTimer& gt) {
+    if ((GetAsyncKeyState(VK_SPACE) & 0x0001) && mLights.size() < MAX_LIGHTS) {
+        XMVECTOR anchorVec = XMLoadFloat3(&mEyePos);
+
+        const float chainLength = 0.9f;
+
+        XMFLOAT3 anchorPosition;
+        XMStoreFloat3(&anchorPosition, anchorVec);
+
+        LightData spotLight;
+        spotLight.Type = static_cast<UINT>(LightType::Spot);
+        spotLight.Position = XMFLOAT3(anchorPosition.x, anchorPosition.y - chainLength, anchorPosition.z);
+        spotLight.Direction = XMFLOAT3(0.0f, -1.0f, 0.0f);
+        spotLight.Color = XMFLOAT3(1.0f, 0.92f, 0.78f);
+        spotLight.Intensity = 30.0f;
+        spotLight.Range = 30.0f;
+        spotLight.Attenuation = XMFLOAT3(1.0f, 0.045f, 0.0075f);
+        spotLight.SpotAngle = XMConvertToRadians(38.0f);
+
+        SwingingSpotLight swinging;
+        swinging.Light = spotLight;
+        swinging.AnchorPosition = anchorPosition;
+        swinging.SpawnTime = gt.getTotalTime();
+        swinging.PhaseOffset = gt.getTotalTime() * 0.73f + static_cast<float>(mSwingingSpotLights.size()) * 1.618f;
+
+        mSwingingSpotLights.push_back(swinging);
+        mLights.push_back(spotLight);
+    }
+
+    const float totalTime = gt.getTotalTime();
+    for (size_t i = 0; i < mSwingingSpotLights.size(); ++i) {
+        auto& swinging = mSwingingSpotLights[i];
+        const float elapsed = totalTime - swinging.SpawnTime;
+
+        const float swingAmplitude = XMConvertToRadians(40.0f);
+        const float swingFrequency = 1.2f;
+        const float chainLength = 0.9f;
+
+        const float swingAngle = swingAmplitude * std::sin(elapsed * swingFrequency + swinging.PhaseOffset);
+
+        XMVECTOR localPosition = XMVectorSet(0.0f, -chainLength, 0.0f, 0.0f);
+        XMMATRIX rotation = XMMatrixRotationRollPitchYaw(swingAngle, 0.0f, 0.0f);
+        XMVECTOR offset = XMVector3TransformNormal(localPosition, rotation);
+        XMVECTOR anchorVec = XMLoadFloat3(&swinging.AnchorPosition);
+        XMVECTOR position = XMVectorAdd(anchorVec, offset);
+
+        XMFLOAT3 worldPosition;
+        XMStoreFloat3(&worldPosition, position);
+        swinging.Light.Position = worldPosition;
+
+        swinging.Light.Direction = XMFLOAT3(0.0f, -1.0f, 0.0f);
+
+        const size_t lightIndex = (mLights.size() - mSwingingSpotLights.size()) + i;
+        if (lightIndex < mLights.size()) {
+            mLights[lightIndex] = swinging.Light;
+        }
+    }
+
     if (GetAsyncKeyState('1') & 0x0001) {
         mEnableColumnVertexAnimation = !mEnableColumnVertexAnimation;
     }
@@ -222,6 +279,7 @@ void BoxApp::initializeConstants() {
     XMStoreFloat4x4(&mProj, XMMatrixIdentity());
 
     mLights.clear();
+    mSwingingSpotLights.clear();
 
     LightData redPointLight;
     redPointLight.Type = static_cast<UINT>(LightType::Point);
