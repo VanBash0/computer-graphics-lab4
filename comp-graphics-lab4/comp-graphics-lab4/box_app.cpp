@@ -18,6 +18,51 @@ namespace {
     bool isColumnSubmesh(const Submesh& submesh) {
         return submesh.material.diffuseTextureName.find("column") != std::string::npos;
     }
+
+    void transformMesh(MeshData& mesh, float scale, const XMFLOAT3& offset) {
+        for (auto& vertex : mesh.vertices) {
+            vertex.position.x = vertex.position.x * scale + offset.x;
+            vertex.position.y = vertex.position.y * scale + offset.y;
+            vertex.position.z = vertex.position.z * scale + offset.z;
+        }
+    }
+
+    void rotateMeshX(MeshData& mesh, float angleRadians) {
+        const float cosAngle = std::cos(angleRadians);
+        const float sinAngle = std::sin(angleRadians);
+
+        for (auto& vertex : mesh.vertices) {
+            const float y = vertex.position.y;
+            const float z = vertex.position.z;
+            vertex.position.y = y * cosAngle - z * sinAngle;
+            vertex.position.z = y * sinAngle + z * cosAngle;
+
+            const float ny = vertex.normal.y;
+            const float nz = vertex.normal.z;
+            vertex.normal.y = ny * cosAngle - nz * sinAngle;
+            vertex.normal.z = ny * sinAngle + nz * cosAngle;
+        }
+    }
+
+    void appendMesh(MeshData& destination, const MeshData& source) {
+        const UINT vertexOffset = static_cast<UINT>(destination.vertices.size());
+        const UINT indexOffset = static_cast<UINT>(destination.indices.size());
+
+        destination.vertices.insert(destination.vertices.end(), source.vertices.begin(), source.vertices.end());
+
+        destination.indices.reserve(destination.indices.size() + source.indices.size());
+        for (uint32_t index : source.indices) {
+            destination.indices.push_back(vertexOffset + index);
+        }
+
+        destination.submeshes.reserve(destination.submeshes.size() + source.submeshes.size());
+        for (const auto& sourceSubmesh : source.submeshes) {
+            Submesh submesh(sourceSubmesh);
+            submesh.startIndiceIndex += indexOffset;
+            submesh.startVerticeIndex += vertexOffset;
+            destination.submeshes.push_back(submesh);
+        }
+    }
 }
 
 void BoxApp::buildResources() {
@@ -48,8 +93,14 @@ void BoxApp::setObjectSize(Vertex& vertex, float scale) {
 }
 
 void BoxApp::buildBuffers() {
-    ModelLoader loader(SCENE_SCALE);
+    ModelLoader loader(SPONZA_SCALE);
     MeshData mesh = loader.loadModel("sponza.obj");
+
+    ModelLoader earthLoader(1.0f);
+    MeshData earthMesh = earthLoader.loadModel("Earth.fbx");
+    rotateMeshX(earthMesh, XM_PI);
+    transformMesh(earthMesh, EARTH_SCALE, XMFLOAT3(0.0f, 30.0f, 0.0f));
+    appendMesh(mesh, earthMesh);
 
     const UINT vbByteSize = static_cast<UINT>(mesh.vertices.size() * sizeof(Vertex));
     const UINT ibByteSize = static_cast<UINT>(mesh.indices.size() * sizeof(uint32_t));
@@ -281,23 +332,23 @@ void BoxApp::initializeConstants() {
     mLights.clear();
     mSwingingSpotLights.clear();
 
-    LightData redPointLight;
-    redPointLight.Type = static_cast<UINT>(LightType::Point);
-    redPointLight.Position = XMFLOAT3(-1.6f, 2.8f, -1.2f);
-    redPointLight.Color = XMFLOAT3(1.0f, 0.0f, 0.0f);
-    redPointLight.Intensity = 15.0f;
-    redPointLight.Range = 10.0f;
-    redPointLight.Attenuation = XMFLOAT3(1.0f, 0.09f, 0.032f);
-    mLights.push_back(redPointLight);
+    //LightData redPointLight;
+    //redPointLight.Type = static_cast<UINT>(LightType::Point);
+    //redPointLight.Position = XMFLOAT3(-1.6f, 2.8f, -1.2f);
+    //redPointLight.Color = XMFLOAT3(1.0f, 0.0f, 0.0f);
+    //redPointLight.Intensity = 15.0f;
+    //redPointLight.Range = 10.0f;
+    //redPointLight.Attenuation = XMFLOAT3(1.0f, 0.09f, 0.032f);
+    //mLights.push_back(redPointLight);
 
-    LightData bluePointLight;
-    bluePointLight.Type = static_cast<UINT>(LightType::Point);
-    bluePointLight.Position = XMFLOAT3(1.6f, 2.8f, -1.2f);
-    bluePointLight.Color = XMFLOAT3(0.0f, 0.0f, 1.0f);
-    bluePointLight.Intensity = 15.0f;
-    bluePointLight.Range = 10.0f;
-    bluePointLight.Attenuation = XMFLOAT3(1.0f, 0.09f, 0.032f);
-    mLights.push_back(bluePointLight);
+    //LightData bluePointLight;
+    //bluePointLight.Type = static_cast<UINT>(LightType::Point);
+    //bluePointLight.Position = XMFLOAT3(1.6f, 2.8f, -1.2f);
+    //bluePointLight.Color = XMFLOAT3(0.0f, 0.0f, 1.0f);
+    //bluePointLight.Intensity = 15.0f;
+    //bluePointLight.Range = 10.0f;
+    //bluePointLight.Attenuation = XMFLOAT3(1.0f, 0.09f, 0.032f);
+    //mLights.push_back(bluePointLight);
 
     LightData directionalFill;
     directionalFill.Type = static_cast<UINT>(LightType::Directional);
@@ -517,25 +568,28 @@ void BoxApp::onResize() {
 }
 
 void BoxApp::loadTextures() {
-    const std::wstring textureDir = L"sponza/";
-    for (auto& entry : std::filesystem::directory_iterator(textureDir)) {
-        if (!entry.is_regular_file())
-            continue;
+    const auto loadTextureDirectory = [this](const std::wstring& textureDir) {
+        for (auto& entry : std::filesystem::directory_iterator(textureDir)) {
+            if (!entry.is_regular_file())
+                continue;
 
-        auto path = entry.path();
+            auto path = entry.path();
+            if (path.extension() != L".dds")
+                continue;
 
-        if (path.extension() != L".dds")
-            continue;
+            std::unique_ptr<Texture> texture = std::make_unique<Texture>();
+            texture->fileName = path.stem().wstring();
+            texture->filePath = path.wstring();
 
-        std::unique_ptr<Texture> texture = std::make_unique<Texture>();
-        texture->fileName = path.stem().wstring();
-        texture->filePath = path.wstring();
+            failCheck(DirectX::CreateDDSTextureFromFile12(md3dDevice.Get(), mCommandList.Get(),
+                texture->filePath.c_str(), texture->resource, texture->uploadHeap));
 
-        failCheck(DirectX::CreateDDSTextureFromFile12(md3dDevice.Get(), mCommandList.Get(),
-            texture->filePath.c_str(), texture->resource, texture->uploadHeap));
+            mTextures[texture->fileName] = std::move(texture);
+        }
+        };
 
-        mTextures[texture->fileName] = std::move(texture);
-    }
+    loadTextureDirectory(L"sponza/");
+    loadTextureDirectory(L"earth/");
 }
 
 void BoxApp::buildCbvSrvHeap() {
