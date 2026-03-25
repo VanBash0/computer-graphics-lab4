@@ -517,7 +517,7 @@ void BoxApp::onResize() {
 }
 
 void BoxApp::loadTextures() {
-    const std::wstring textureDir = L"textures/";
+    const std::wstring textureDir = L"sponza/";
     for (auto& entry : std::filesystem::directory_iterator(textureDir)) {
         if (!entry.is_regular_file())
             continue;
