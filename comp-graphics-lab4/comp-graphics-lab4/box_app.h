@@ -92,7 +92,7 @@ private:
     void draw(const GameTimer& gt) override;
     void onMouseMove(WPARAM btnState, int x, int y) override;
 
-    void createDefaultTexture();
+    void createDefaultTextures();
 
     ComPtr<ID3D12Resource> mVertexBufferGPU;
     ComPtr<ID3D12Resource> mVertexBufferUploader;
@@ -139,7 +139,10 @@ private:
     std::vector<LightData> mLights;
     std::vector<SwingingSpotLight> mSwingingSpotLights;
     std::unordered_map<std::wstring, std::unique_ptr<Texture>> mTextures;
-    ComPtr<ID3D12Resource> mDefaultTex = nullptr;
+    ComPtr<ID3D12Resource> mDefaultDiffuseTex = nullptr;
+    ComPtr<ID3D12Resource> mDefaultNormalTex = nullptr;
+    ComPtr<ID3D12Resource> mDefaultDiffuseTexUpload = nullptr;
+    ComPtr<ID3D12Resource> mDefaultNormalTexUpload = nullptr;
     std::unique_ptr<RenderingSystem> mRenderingSystem;
 
     bool mEnableColumnVertexAnimation = true;

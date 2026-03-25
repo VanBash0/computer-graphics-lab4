@@ -41,6 +41,16 @@ namespace {
             const float nz = vertex.normal.z;
             vertex.normal.y = ny * cosAngle - nz * sinAngle;
             vertex.normal.z = ny * sinAngle + nz * cosAngle;
+
+            const float ty = vertex.tangent.y;
+            const float tz = vertex.tangent.z;
+            vertex.tangent.y = ty * cosAngle - tz * sinAngle;
+            vertex.tangent.z = ty * sinAngle + tz * cosAngle;
+
+            const float by = vertex.bitangent.y;
+            const float bz = vertex.bitangent.z;
+            vertex.bitangent.y = by * cosAngle - bz * sinAngle;
+            vertex.bitangent.z = by * sinAngle + bz * cosAngle;
         }
     }
 
@@ -74,6 +84,7 @@ void BoxApp::buildResources() {
     buildRootSignature();
     buildLightingRootSignature();
     buildConstantBuffer();
+    createDefaultTextures();
     buildCbvSrvHeap();
     bindMaterialsToTextures();
     buildPso(L"main_shader.hlsl", mPSO);
@@ -121,7 +132,9 @@ void BoxApp::buildBuffers() {
     mInputLayout = {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
         { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        { "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "BINORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 36, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 48, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
     };
 
     mVertexBufferView.BufferLocation = mVertexBufferGPU->GetGPUVirtualAddress();
@@ -395,6 +408,10 @@ void BoxApp::draw(const GameTimer& gt)
         srvHandle.Offset(submesh.material.diffuseSrvHeapIndex, mCbvSrvDescriptorSize);
         mCommandList->SetGraphicsRootDescriptorTable(1, srvHandle);
 
+        CD3DX12_GPU_DESCRIPTOR_HANDLE normalSrvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart());
+        normalSrvHandle.Offset(submesh.material.normalSrvHeapIndex, mCbvSrvDescriptorSize);
+        mCommandList->SetGraphicsRootDescriptorTable(2, normalSrvHandle);
+
         mCommandList->DrawIndexedInstanced(submesh.indexCount, 1, submesh.startIndiceIndex, 0, 0);
     }
 
@@ -444,9 +461,13 @@ void BoxApp::buildRootSignature() {
     CD3DX12_DESCRIPTOR_RANGE srvRange;
     srvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
 
-    CD3DX12_ROOT_PARAMETER slotRootParameter[2];
+    CD3DX12_DESCRIPTOR_RANGE normalSrvRange;
+    normalSrvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1);
+
+    CD3DX12_ROOT_PARAMETER slotRootParameter[3];
     slotRootParameter[0].InitAsDescriptorTable(1, &cbvRange, D3D12_SHADER_VISIBILITY_ALL);
     slotRootParameter[1].InitAsDescriptorTable(1, &srvRange, D3D12_SHADER_VISIBILITY_PIXEL);
+    slotRootParameter[2].InitAsDescriptorTable(1, &normalSrvRange, D3D12_SHADER_VISIBILITY_PIXEL);
 
     CD3DX12_STATIC_SAMPLER_DESC staticSampler(0,
         D3D12_FILTER_MIN_MAG_MIP_LINEAR,
@@ -454,7 +475,7 @@ void BoxApp::buildRootSignature() {
         D3D12_TEXTURE_ADDRESS_MODE_WRAP,
         D3D12_TEXTURE_ADDRESS_MODE_WRAP);
 
-    CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(2, slotRootParameter, 1, &staticSampler,
+    CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(3, slotRootParameter, 1, &staticSampler,
         D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
     ComPtr<ID3DBlob> serializedRootSig;
@@ -594,7 +615,7 @@ void BoxApp::loadTextures() {
 
 void BoxApp::buildCbvSrvHeap() {
     UINT numTextures = static_cast<UINT>(mTextures.size());
-    UINT numDescriptors = 4 + GBuffer::mTexturesNum + numTextures;
+    UINT numDescriptors = 6 + GBuffer::mTexturesNum + numTextures;
 
     D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
     heapDesc.NumDescriptors = numDescriptors;
@@ -642,9 +663,12 @@ void BoxApp::buildCbvSrvHeap() {
     srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     srvDesc.Texture2D.MostDetailedMip = 0;
     srvDesc.Texture2D.MipLevels = 1;
-    md3dDevice->CreateShaderResourceView(mDefaultTex.Get(), &srvDesc, handle);
+    md3dDevice->CreateShaderResourceView(mDefaultDiffuseTex.Get(), &srvDesc, handle);
 
-    UINT i = 4 + GBuffer::mTexturesNum;
+    handle.Offset(1, mCbvSrvDescriptorSize);
+    md3dDevice->CreateShaderResourceView(mDefaultNormalTex.Get(), &srvDesc, handle);
+
+    UINT i = 6 + GBuffer::mTexturesNum;
     for (auto& kv : mTextures) {
         Texture* texture = kv.second.get();
         srvDesc.Format = texture->resource->GetDesc().Format;
@@ -661,52 +685,67 @@ void BoxApp::buildCbvSrvHeap() {
 void BoxApp::bindMaterialsToTextures() {
     for (auto& submesh : mSubmeshes) {
         const std::string& texName = submesh.material.diffuseTextureName;
+        const std::string& normalTexName = submesh.material.normalTextureName;
+        const UINT defaultDiffuseSrvIndex = 4 + GBuffer::mTexturesNum;
+        const UINT defaultNormalSrvIndex = 5 + GBuffer::mTexturesNum;
         if (texName.empty()) {
-            submesh.material.diffuseSrvHeapIndex = 4 + GBuffer::mTexturesNum;
-            continue;
+            submesh.material.diffuseSrvHeapIndex = defaultDiffuseSrvIndex;
         }
-        auto it = mTextures.find(std::wstring(texName.begin(), texName.end()));
-        submesh.material.diffuseSrvHeapIndex = (it != mTextures.end()) ? it->second->srvHeapIndex : (4 + GBuffer::mTexturesNum);
+        else {
+            auto it = mTextures.find(std::wstring(texName.begin(), texName.end()));
+            submesh.material.diffuseSrvHeapIndex = (it != mTextures.end()) ? it->second->srvHeapIndex : defaultDiffuseSrvIndex;
+        }
+
+        if (normalTexName.empty()) {
+            submesh.material.normalSrvHeapIndex = defaultNormalSrvIndex;
+        }
+        else {
+            auto it = mTextures.find(std::wstring(normalTexName.begin(), normalTexName.end()));
+            submesh.material.normalSrvHeapIndex = (it != mTextures.end()) ? it->second->srvHeapIndex : defaultNormalSrvIndex;
+        }
     }
 }
 
-void BoxApp::createDefaultTexture() {
-    D3D12_RESOURCE_DESC texDesc = {};
-    texDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-    texDesc.Alignment = 0;
-    texDesc.Width = 1;
-    texDesc.Height = 1;
-    texDesc.DepthOrArraySize = 1;
-    texDesc.MipLevels = 1;
-    texDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    texDesc.SampleDesc.Count = 1;
-    texDesc.SampleDesc.Quality = 0;
-    texDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-    texDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+void BoxApp::createDefaultTextures() {
+    const auto createSolidTexture = [this](uint32_t color, ComPtr<ID3D12Resource>& textureResource, ComPtr<ID3D12Resource>& uploadResource) {
+        D3D12_RESOURCE_DESC texDesc = {};
+        texDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        texDesc.Alignment = 0;
+        texDesc.Width = 1;
+        texDesc.Height = 1;
+        texDesc.DepthOrArraySize = 1;
+        texDesc.MipLevels = 1;
+        texDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        texDesc.SampleDesc.Count = 1;
+        texDesc.SampleDesc.Quality = 0;
+        texDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+        texDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
-    CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_DEFAULT);
-    failCheck(md3dDevice->CreateCommittedResource(
-        &heapProps, D3D12_HEAP_FLAG_NONE, &texDesc,
-        D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&mDefaultTex)));
+        CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_DEFAULT);
+        failCheck(md3dDevice->CreateCommittedResource(
+            &heapProps, D3D12_HEAP_FLAG_NONE, &texDesc,
+            D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&textureResource)));
 
-    const UINT64 uploadBufferSize = GetRequiredIntermediateSize(mDefaultTex.Get(), 0, 1);
-    ComPtr<ID3D12Resource> textureUploadHeap;
-    CD3DX12_HEAP_PROPERTIES uploadHeapProps(D3D12_HEAP_TYPE_UPLOAD);
-    CD3DX12_RESOURCE_DESC bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize);
+        const UINT64 uploadBufferSize = GetRequiredIntermediateSize(textureResource.Get(), 0, 1);
+        CD3DX12_HEAP_PROPERTIES uploadHeapProps(D3D12_HEAP_TYPE_UPLOAD);
+        CD3DX12_RESOURCE_DESC bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize);
 
-    failCheck(md3dDevice->CreateCommittedResource(
-        &uploadHeapProps, D3D12_HEAP_FLAG_NONE, &bufferDesc,
-        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&textureUploadHeap)));
+        failCheck(md3dDevice->CreateCommittedResource(
+            &uploadHeapProps, D3D12_HEAP_FLAG_NONE, &bufferDesc,
+            D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&uploadResource)));
 
-    uint32_t whiteColor = 0xffffffff;
-    D3D12_SUBRESOURCE_DATA texData = {};
-    texData.pData = &whiteColor;
-    texData.RowPitch = 4;
-    texData.SlicePitch = texData.RowPitch;
+        D3D12_SUBRESOURCE_DATA texData = {};
+        texData.pData = &color;
+        texData.RowPitch = 4;
+        texData.SlicePitch = texData.RowPitch;
 
-    UpdateSubresources(mCommandList.Get(), mDefaultTex.Get(), textureUploadHeap.Get(), 0, 0, 1, &texData);
+        UpdateSubresources(mCommandList.Get(), textureResource.Get(), uploadResource.Get(), 0, 0, 1, &texData);
 
-    CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-        mDefaultTex.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-    mCommandList->ResourceBarrier(1, &barrier);
+        CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            textureResource.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        mCommandList->ResourceBarrier(1, &barrier);
+        };
+
+    createSolidTexture(0xffffffff, mDefaultDiffuseTex, mDefaultDiffuseTexUpload);
+    createSolidTexture(0xffff8080, mDefaultNormalTex, mDefaultNormalTexUpload);
 }

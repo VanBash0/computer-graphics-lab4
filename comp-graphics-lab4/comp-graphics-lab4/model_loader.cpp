@@ -47,6 +47,22 @@ void ModelLoader::parseMesh(const aiMesh* mesh, const aiMatrix4x4& transform, Me
             vertex.normal = { 0.f, 1.f, 0.f };
         }
 
+        if (mesh->HasTangentsAndBitangents()) {
+            XMVECTOR tangent = XMLoadFloat3(reinterpret_cast<const XMFLOAT3*>(&mesh->mTangents[i]));
+            tangent = XMVector3TransformNormal(tangent, normalMatrix);
+            tangent = XMVector3Normalize(tangent);
+            XMStoreFloat3(&vertex.tangent, tangent);
+
+            XMVECTOR bitangent = XMLoadFloat3(reinterpret_cast<const XMFLOAT3*>(&mesh->mBitangents[i]));
+            bitangent = XMVector3TransformNormal(bitangent, normalMatrix);
+            bitangent = XMVector3Normalize(bitangent);
+            XMStoreFloat3(&vertex.bitangent, bitangent);
+        }
+        else {
+            vertex.tangent = { 1.0f, 0.0f, 0.0f };
+            vertex.bitangent = { 0.0f, 0.0f, 1.0f };
+        }
+
         if (mesh->HasTextureCoords(0)) {
             vertex.texCoord.x = mesh->mTextureCoords[0][i].x;
             vertex.texCoord.y = 1.0f - mesh->mTextureCoords[0][i].y;
@@ -81,6 +97,13 @@ void ModelLoader::parseMesh(const aiMesh* mesh, const aiMatrix4x4& transform, Me
             std::filesystem::path p(fullPath);
             submesh.material.diffuseTextureName = p.stem().string();
         }
+        if (material->GetTexture(aiTextureType_NORMALS, 0, &texturePath) == AI_SUCCESS ||
+            material->GetTexture(aiTextureType_HEIGHT, 0, &texturePath) == AI_SUCCESS) {
+            std::string fullPath = texturePath.C_Str();
+
+            std::filesystem::path p(fullPath);
+            submesh.material.normalTextureName = p.stem().string();
+        }
         float shininess = 0.f;
         if (material->Get(AI_MATKEY_SHININESS, shininess) == AI_SUCCESS) {
             submesh.material.shininess = shininess;
@@ -110,6 +133,7 @@ MeshData ModelLoader::loadModel(const std::string& fileName) {
         fileName,
         aiProcess_Triangulate |
         aiProcess_GenSmoothNormals |
+        aiProcess_CalcTangentSpace |
         aiProcess_JoinIdenticalVertices |
         aiProcess_ImproveCacheLocality
     );

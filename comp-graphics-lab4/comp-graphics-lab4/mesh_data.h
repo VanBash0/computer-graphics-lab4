@@ -13,7 +13,9 @@ struct Material {
     float shininess;
 
     UINT diffuseSrvHeapIndex = 0;
+    UINT normalSrvHeapIndex = 0;
     std::string diffuseTextureName;
+    std::string normalTextureName;
 };
 
 struct Submesh {
