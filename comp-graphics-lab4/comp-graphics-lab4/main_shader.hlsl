@@ -9,6 +9,7 @@ cbuffer cbPerObject : register(b0)
 
 Texture2D gDiffuseMap : register(t0);
 Texture2D gNormalMap : register(t1);
+Texture2D gDisplacementMap : register(t2);
 SamplerState gSampler : register(s0);
 
 struct VertexIn
@@ -27,6 +28,21 @@ struct VertexOut
     float3 TangentW : TANGENT;
     float3 BitangentW : BINORMAL;
     float2 TexC : TEXCOORD;
+};
+
+struct TessControlPoint
+{
+    float3 PosL : POSITION;
+    float3 NormalL : NORMAL;
+    float3 TangentL : TANGENT;
+    float3 BitangentL : BINORMAL;
+    float2 TexC : TEXCOORD;
+};
+
+struct PatchTess
+{
+    float EdgeTess[3] : SV_TessFactor;
+    float InsideTess : SV_InsideTessFactor;
 };
 
 struct GBufferOut
@@ -48,6 +64,83 @@ VertexOut VS(VertexIn vin)
 
     float4 texC = mul(float4(vin.TexC, 0.0f, 1.0f), gTexTransform);
     vout.TexC = texC.xy;
+
+    return vout;
+}
+
+TessControlPoint VS_Tess(VertexIn vin)
+{
+    TessControlPoint vout;
+    vout.PosL = vin.PosL;
+    vout.NormalL = vin.NormalL;
+    vout.TangentL = vin.TangentL;
+    vout.BitangentL = vin.BitangentL;
+
+    float4 texC = mul(float4(vin.TexC, 0.0f, 1.0f), gTexTransform);
+    vout.TexC = texC.xy;
+    return vout;
+}
+
+PatchTess PatchHS(InputPatch<TessControlPoint, 3> patch, uint patchId : SV_PrimitiveID)
+{
+    PatchTess pt;
+    // Keep factor constant for now; prepared for future camera-distance based LOD.
+    const float tessFactor = 8.0f;
+    pt.EdgeTess[0] = tessFactor;
+    pt.EdgeTess[1] = tessFactor;
+    pt.EdgeTess[2] = tessFactor;
+    pt.InsideTess = tessFactor;
+    return pt;
+}
+
+[domain("tri")]
+[partitioning("fractional_odd")]
+[outputtopology("triangle_cw")]
+[outputcontrolpoints(3)]
+[patchconstantfunc("PatchHS")]
+TessControlPoint HS(InputPatch<TessControlPoint, 3> patch, uint i : SV_OutputControlPointID, uint patchId : SV_PrimitiveID)
+{
+    return patch[i];
+}
+
+[domain("tri")]
+VertexOut DS(PatchTess patchTess, float3 bary : SV_DomainLocation, const OutputPatch<TessControlPoint, 3> patch)
+{
+    VertexOut vout;
+
+    float3 posL =
+        bary.x * patch[0].PosL +
+        bary.y * patch[1].PosL +
+        bary.z * patch[2].PosL;
+
+    float3 normalL = normalize(
+        bary.x * patch[0].NormalL +
+        bary.y * patch[1].NormalL +
+        bary.z * patch[2].NormalL);
+    float3 tangentL = normalize(
+        bary.x * patch[0].TangentL +
+        bary.y * patch[1].TangentL +
+        bary.z * patch[2].TangentL);
+    float3 bitangentL = normalize(
+        bary.x * patch[0].BitangentL +
+        bary.y * patch[1].BitangentL +
+        bary.z * patch[2].BitangentL);
+
+    float2 texC =
+        bary.x * patch[0].TexC +
+        bary.y * patch[1].TexC +
+        bary.z * patch[2].TexC;
+
+    const float displacementScale = .4f;
+    float displacement = gDisplacementMap.SampleLevel(gSampler, texC, 0).r;
+    posL += normalL * (displacement * displacementScale);
+
+    float4 posW = mul(float4(posL, 1.0f), gWorld);
+    vout.NormalW = mul(normalL, (float3x3) gWorld);
+    vout.TangentW = mul(tangentL, (float3x3) gWorld);
+    vout.BitangentW = mul(bitangentL, (float3x3) gWorld);
+    vout.PosH = mul(posW, gWorldViewProj);
+    vout.TexC = texC;
 
     return vout;
 }

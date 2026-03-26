@@ -98,11 +98,14 @@ void ModelLoader::parseMesh(const aiMesh* mesh, const aiMatrix4x4& transform, Me
             submesh.material.diffuseTextureName = p.stem().string();
         }
         if (material->GetTexture(aiTextureType_NORMALS, 0, &texturePath) == AI_SUCCESS ||
-            material->GetTexture(aiTextureType_HEIGHT, 0, &texturePath) == AI_SUCCESS) {
+            material->GetTexture(aiTextureType_DISPLACEMENT, 0, &texturePath) == AI_SUCCESS) {
             std::string fullPath = texturePath.C_Str();
 
             std::filesystem::path p(fullPath);
             submesh.material.normalTextureName = p.stem().string();
+        }
+        if (material->GetTexture(aiTextureType_EMISSIVE, 0, &texturePath) == AI_SUCCESS) {
+            submesh.material.displacementTextureName = "Earth_HEIGHT";
         }
         float shininess = 0.f;
         if (material->Get(AI_MATKEY_SHININESS, shininess) == AI_SUCCESS) {

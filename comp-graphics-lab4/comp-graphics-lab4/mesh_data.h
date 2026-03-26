@@ -14,8 +14,10 @@ struct Material {
 
     UINT diffuseSrvHeapIndex = 0;
     UINT normalSrvHeapIndex = 0;
+    UINT displacementSrvHeapIndex = 0;
     std::string diffuseTextureName;
     std::string normalTextureName;
+    std::string displacementTextureName;
 };
 
 struct Submesh {

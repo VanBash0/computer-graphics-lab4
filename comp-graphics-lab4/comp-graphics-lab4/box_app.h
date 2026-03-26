@@ -82,7 +82,7 @@ private:
     void buildConstantBuffer();
     void buildRootSignature();
     void buildLightingRootSignature();
-    void buildPso(const std::wstring& shaderName, ComPtr<ID3D12PipelineState>& pso);
+    void buildPso(const std::wstring& shaderName, ComPtr<ID3D12PipelineState>& pso, bool enableTessellation = false);
     void initializeConstants();
     void loadTextures();
     void buildCbvSrvHeap();
@@ -108,6 +108,7 @@ private:
     ComPtr<ID3D12RootSignature> mRootSignature;
     ComPtr<ID3D12RootSignature> mLightingRootSignature;
     ComPtr<ID3D12PipelineState> mPSO;
+    ComPtr<ID3D12PipelineState> mEarthTessPSO;
     ComPtr<ID3D12PipelineState> mColumnPSO;
     ComPtr<ID3D12PipelineState> mLightingPSO;
 
@@ -141,8 +142,10 @@ private:
     std::unordered_map<std::wstring, std::unique_ptr<Texture>> mTextures;
     ComPtr<ID3D12Resource> mDefaultDiffuseTex = nullptr;
     ComPtr<ID3D12Resource> mDefaultNormalTex = nullptr;
+    ComPtr<ID3D12Resource> mDefaultDisplacementTex = nullptr;
     ComPtr<ID3D12Resource> mDefaultDiffuseTexUpload = nullptr;
     ComPtr<ID3D12Resource> mDefaultNormalTexUpload = nullptr;
+    ComPtr<ID3D12Resource> mDefaultDisplacementTexUpload = nullptr;
     std::unique_ptr<RenderingSystem> mRenderingSystem;
 
     bool mEnableColumnVertexAnimation = true;

@@ -19,6 +19,10 @@ namespace {
         return submesh.material.diffuseTextureName.find("column") != std::string::npos;
     }
 
+    bool hasDisplacementTexture(const Submesh& submesh) {
+        return submesh.material.displacementTextureName.find("Earth_") != std::string::npos;
+    }
+
     void transformMesh(MeshData& mesh, float scale, const XMFLOAT3& offset) {
         for (auto& vertex : mesh.vertices) {
             vertex.position.x = vertex.position.x * scale + offset.x;
@@ -88,6 +92,7 @@ void BoxApp::buildResources() {
     buildCbvSrvHeap();
     bindMaterialsToTextures();
     buildPso(L"main_shader.hlsl", mPSO);
+    buildPso(L"main_shader.hlsl", mEarthTessPSO, true);
     buildPso(L"column_shader.hlsl", mColumnPSO);
     buildPso(L"lighting_shader.hlsl", mLightingPSO);
     failCheck(mCommandList->Close());
@@ -345,23 +350,23 @@ void BoxApp::initializeConstants() {
     mLights.clear();
     mSwingingSpotLights.clear();
 
-    //LightData redPointLight;
-    //redPointLight.Type = static_cast<UINT>(LightType::Point);
-    //redPointLight.Position = XMFLOAT3(-1.6f, 2.8f, -1.2f);
-    //redPointLight.Color = XMFLOAT3(1.0f, 0.0f, 0.0f);
-    //redPointLight.Intensity = 15.0f;
-    //redPointLight.Range = 10.0f;
-    //redPointLight.Attenuation = XMFLOAT3(1.0f, 0.09f, 0.032f);
-    //mLights.push_back(redPointLight);
+    LightData redPointLight;
+    redPointLight.Type = static_cast<UINT>(LightType::Point);
+    redPointLight.Position = XMFLOAT3(-1.6f, 2.8f, -1.2f);
+    redPointLight.Color = XMFLOAT3(1.0f, 0.0f, 0.0f);
+    redPointLight.Intensity = 15.0f;
+    redPointLight.Range = 10.0f;
+    redPointLight.Attenuation = XMFLOAT3(1.0f, 0.09f, 0.032f);
+    mLights.push_back(redPointLight);
 
-    //LightData bluePointLight;
-    //bluePointLight.Type = static_cast<UINT>(LightType::Point);
-    //bluePointLight.Position = XMFLOAT3(1.6f, 2.8f, -1.2f);
-    //bluePointLight.Color = XMFLOAT3(0.0f, 0.0f, 1.0f);
-    //bluePointLight.Intensity = 15.0f;
-    //bluePointLight.Range = 10.0f;
-    //bluePointLight.Attenuation = XMFLOAT3(1.0f, 0.09f, 0.032f);
-    //mLights.push_back(bluePointLight);
+    LightData bluePointLight;
+    bluePointLight.Type = static_cast<UINT>(LightType::Point);
+    bluePointLight.Position = XMFLOAT3(1.6f, 2.8f, -1.2f);
+    bluePointLight.Color = XMFLOAT3(0.0f, 0.0f, 1.0f);
+    bluePointLight.Intensity = 15.0f;
+    bluePointLight.Range = 10.0f;
+    bluePointLight.Attenuation = XMFLOAT3(1.0f, 0.09f, 0.032f);
+    mLights.push_back(bluePointLight);
 
     LightData directionalFill;
     directionalFill.Type = static_cast<UINT>(LightType::Directional);
@@ -391,14 +396,22 @@ void BoxApp::draw(const GameTimer& gt)
     mRenderingSystem->beginGeometryPass(mCommandList.Get(), getDepthStencilView());
 
     mCommandList->SetGraphicsRootSignature(mRootSignature.Get());
-    mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     mCommandList->IASetVertexBuffers(0, 1, &mVertexBufferView);
     mCommandList->IASetIndexBuffer(&mIndexBufferView);
 
     for (const auto& submesh : mSubmeshes) {
         const bool isColumn = isColumnSubmesh(submesh);
+        const bool useTessellation = !isColumn && hasDisplacementTexture(submesh);
 
-        mCommandList->SetPipelineState(isColumn ? mColumnPSO.Get() : mPSO.Get());
+        if (useTessellation) {
+            mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST);
+            mCommandList->SetPipelineState(mEarthTessPSO.Get());
+        }
+        else {
+            mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            mCommandList->SetPipelineState(isColumn ? mColumnPSO.Get() : mPSO.Get());
+        }
+
 
         CD3DX12_GPU_DESCRIPTOR_HANDLE cbvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart());
         cbvHandle.Offset(isColumn ? 0 : 1, mCbvSrvDescriptorSize);
@@ -411,6 +424,10 @@ void BoxApp::draw(const GameTimer& gt)
         CD3DX12_GPU_DESCRIPTOR_HANDLE normalSrvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart());
         normalSrvHandle.Offset(submesh.material.normalSrvHeapIndex, mCbvSrvDescriptorSize);
         mCommandList->SetGraphicsRootDescriptorTable(2, normalSrvHandle);
+
+        CD3DX12_GPU_DESCRIPTOR_HANDLE displacementSrvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart());
+        displacementSrvHandle.Offset(submesh.material.displacementSrvHeapIndex, mCbvSrvDescriptorSize);
+        mCommandList->SetGraphicsRootDescriptorTable(3, displacementSrvHandle);
 
         mCommandList->DrawIndexedInstanced(submesh.indexCount, 1, submesh.startIndiceIndex, 0, 0);
     }
@@ -464,10 +481,14 @@ void BoxApp::buildRootSignature() {
     CD3DX12_DESCRIPTOR_RANGE normalSrvRange;
     normalSrvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1);
 
-    CD3DX12_ROOT_PARAMETER slotRootParameter[3];
+    CD3DX12_DESCRIPTOR_RANGE displacementSrvRange;
+    displacementSrvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2);
+
+    CD3DX12_ROOT_PARAMETER slotRootParameter[4];
     slotRootParameter[0].InitAsDescriptorTable(1, &cbvRange, D3D12_SHADER_VISIBILITY_ALL);
     slotRootParameter[1].InitAsDescriptorTable(1, &srvRange, D3D12_SHADER_VISIBILITY_PIXEL);
     slotRootParameter[2].InitAsDescriptorTable(1, &normalSrvRange, D3D12_SHADER_VISIBILITY_PIXEL);
+    slotRootParameter[3].InitAsDescriptorTable(1, &displacementSrvRange, D3D12_SHADER_VISIBILITY_ALL);
 
     CD3DX12_STATIC_SAMPLER_DESC staticSampler(0,
         D3D12_FILTER_MIN_MAG_MIP_LINEAR,
@@ -475,7 +496,7 @@ void BoxApp::buildRootSignature() {
         D3D12_TEXTURE_ADDRESS_MODE_WRAP,
         D3D12_TEXTURE_ADDRESS_MODE_WRAP);
 
-    CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(3, slotRootParameter, 1, &staticSampler,
+    CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(4, slotRootParameter, 1, &staticSampler,
         D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
     ComPtr<ID3DBlob> serializedRootSig;
@@ -528,12 +549,18 @@ void BoxApp::buildLightingRootSignature() {
         IID_PPV_ARGS(&mLightingRootSignature)));
 }
 
-void BoxApp::buildPso(const std::wstring& shaderName, ComPtr<ID3D12PipelineState>& pso) {
+void BoxApp::buildPso(const std::wstring& shaderName, ComPtr<ID3D12PipelineState>& pso, bool enableTessellation) {
     ComPtr<ID3DBlob> mvsByteCode;
     ComPtr<ID3DBlob> mpsByteCode;
+    ComPtr<ID3DBlob> mhsByteCode;
+    ComPtr<ID3DBlob> mdsByteCode;
 
-    mvsByteCode = D3DUtil::compileShader(shaderName, nullptr, "VS", "vs_5_0");
+    mvsByteCode = D3DUtil::compileShader(shaderName, nullptr, enableTessellation ? "VS_Tess" : "VS", "vs_5_0");
     mpsByteCode = D3DUtil::compileShader(shaderName, nullptr, "PS", "ps_5_0");
+    if (enableTessellation) {
+        mhsByteCode = D3DUtil::compileShader(shaderName, nullptr, "HS", "hs_5_0");
+        mdsByteCode = D3DUtil::compileShader(shaderName, nullptr, "DS", "ds_5_0");
+    }
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
     ZeroMemory(&psoDesc, sizeof(D3D12_GRAPHICS_PIPELINE_STATE_DESC));
@@ -551,11 +578,22 @@ void BoxApp::buildPso(const std::wstring& shaderName, ComPtr<ID3D12PipelineState
         mpsByteCode->GetBufferSize()
     };
 
+    if (enableTessellation) {
+        psoDesc.HS = {
+            reinterpret_cast<BYTE*>(mhsByteCode->GetBufferPointer()),
+            mhsByteCode->GetBufferSize()
+        };
+        psoDesc.DS = {
+            reinterpret_cast<BYTE*>(mdsByteCode->GetBufferPointer()),
+            mdsByteCode->GetBufferSize()
+        };
+    }
+
     psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
     psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
     psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
     psoDesc.SampleMask = UINT_MAX;
-    psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    psoDesc.PrimitiveTopologyType = enableTessellation ? D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH : D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     if (isLightingPass) {
         psoDesc.NumRenderTargets = 1;
         psoDesc.RTVFormats[0] = mBackBufferFormat;
@@ -615,7 +653,7 @@ void BoxApp::loadTextures() {
 
 void BoxApp::buildCbvSrvHeap() {
     UINT numTextures = static_cast<UINT>(mTextures.size());
-    UINT numDescriptors = 6 + GBuffer::mTexturesNum + numTextures;
+    UINT numDescriptors = 7 + GBuffer::mTexturesNum + numTextures;
 
     D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
     heapDesc.NumDescriptors = numDescriptors;
@@ -668,7 +706,10 @@ void BoxApp::buildCbvSrvHeap() {
     handle.Offset(1, mCbvSrvDescriptorSize);
     md3dDevice->CreateShaderResourceView(mDefaultNormalTex.Get(), &srvDesc, handle);
 
-    UINT i = 6 + GBuffer::mTexturesNum;
+    handle.Offset(1, mCbvSrvDescriptorSize);
+    md3dDevice->CreateShaderResourceView(mDefaultDisplacementTex.Get(), &srvDesc, handle);
+
+    UINT i = 7 + GBuffer::mTexturesNum;
     for (auto& kv : mTextures) {
         Texture* texture = kv.second.get();
         srvDesc.Format = texture->resource->GetDesc().Format;
@@ -686,8 +727,10 @@ void BoxApp::bindMaterialsToTextures() {
     for (auto& submesh : mSubmeshes) {
         const std::string& texName = submesh.material.diffuseTextureName;
         const std::string& normalTexName = submesh.material.normalTextureName;
+        const std::string& displacementTexName = submesh.material.displacementTextureName;
         const UINT defaultDiffuseSrvIndex = 4 + GBuffer::mTexturesNum;
         const UINT defaultNormalSrvIndex = 5 + GBuffer::mTexturesNum;
+        const UINT defaultDisplacementSrvIndex = 6 + GBuffer::mTexturesNum;
         if (texName.empty()) {
             submesh.material.diffuseSrvHeapIndex = defaultDiffuseSrvIndex;
         }
@@ -702,6 +745,14 @@ void BoxApp::bindMaterialsToTextures() {
         else {
             auto it = mTextures.find(std::wstring(normalTexName.begin(), normalTexName.end()));
             submesh.material.normalSrvHeapIndex = (it != mTextures.end()) ? it->second->srvHeapIndex : defaultNormalSrvIndex;
+        }
+
+        if (displacementTexName.empty()) {
+            submesh.material.displacementSrvHeapIndex = defaultDisplacementSrvIndex;
+        }
+        else {
+            auto it = mTextures.find(std::wstring(displacementTexName.begin(), displacementTexName.end()));
+            submesh.material.displacementSrvHeapIndex = (it != mTextures.end()) ? it->second->srvHeapIndex : defaultDisplacementSrvIndex;
         }
     }
 }
@@ -748,4 +799,5 @@ void BoxApp::createDefaultTextures() {
 
     createSolidTexture(0xffffffff, mDefaultDiffuseTex, mDefaultDiffuseTexUpload);
     createSolidTexture(0xffff8080, mDefaultNormalTex, mDefaultNormalTexUpload);
+    createSolidTexture(0xff000000, mDefaultDisplacementTex, mDefaultDisplacementTexUpload);
 }
