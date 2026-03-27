@@ -75,6 +75,7 @@ private:
     const float SPONZA_SCALE = 0.01f;
     const float EARTH_SCALE = 0.1f;
     const float SPEED_FACTOR = 10.f;
+    const float DISPLACEMENT_SCALE = 0.4f;
     const Vector3 TEXTURE_SCALE = Vector3(1.f, 1.f, 1.f);
     void setObjectSize(Vertex& vertex, float scale);
 

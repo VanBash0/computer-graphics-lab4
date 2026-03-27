@@ -276,7 +276,7 @@ void BoxApp::update(const GameTimer& gt) {
 
     objConstantsNoAnim.TotalTime = gt.getTotalTime();
     objConstantsNoAnim.Padding = XMFLOAT3(mEnableColumnVertexAnimation ? 1.0f : 0.0f,
-        mEnableColumnTextureAnimation ? 1.0f : 0.0f, 0.0f);
+        mEnableColumnTextureAnimation ? 1.0f : 0.0f, DISPLACEMENT_SCALE);
 
     mObjectCB->copyData(0, objConstantsNoAnim);
 
@@ -285,7 +285,7 @@ void BoxApp::update(const GameTimer& gt) {
     XMStoreFloat4x4(&objConstantsStatic.World, XMMatrixTranspose(world));
     XMStoreFloat4x4(&objConstantsStatic.TextureTransform, XMMatrixTranspose(texScale));
     objConstantsStatic.TotalTime = 0.0f;
-    objConstantsStatic.Padding = XMFLOAT3(0.0f, 0.0f, 0.0f);
+    objConstantsStatic.Padding = XMFLOAT3(0.0f, 0.0f, DISPLACEMENT_SCALE);
 
     mObjectCB->copyData(1, objConstantsStatic);
 
@@ -417,17 +417,20 @@ void BoxApp::draw(const GameTimer& gt)
         cbvHandle.Offset(isColumn ? 0 : 1, mCbvSrvDescriptorSize);
         mCommandList->SetGraphicsRootDescriptorTable(0, cbvHandle);
 
+        CD3DX12_GPU_DESCRIPTOR_HANDLE passCbvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart(), 2, mCbvSrvDescriptorSize);
+        mCommandList->SetGraphicsRootDescriptorTable(1, passCbvHandle);
+
         CD3DX12_GPU_DESCRIPTOR_HANDLE srvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart());
         srvHandle.Offset(submesh.material.diffuseSrvHeapIndex, mCbvSrvDescriptorSize);
-        mCommandList->SetGraphicsRootDescriptorTable(1, srvHandle);
+        mCommandList->SetGraphicsRootDescriptorTable(2, srvHandle);
 
         CD3DX12_GPU_DESCRIPTOR_HANDLE normalSrvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart());
         normalSrvHandle.Offset(submesh.material.normalSrvHeapIndex, mCbvSrvDescriptorSize);
-        mCommandList->SetGraphicsRootDescriptorTable(2, normalSrvHandle);
+        mCommandList->SetGraphicsRootDescriptorTable(3, normalSrvHandle);
 
         CD3DX12_GPU_DESCRIPTOR_HANDLE displacementSrvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart());
         displacementSrvHandle.Offset(submesh.material.displacementSrvHeapIndex, mCbvSrvDescriptorSize);
-        mCommandList->SetGraphicsRootDescriptorTable(3, displacementSrvHandle);
+        mCommandList->SetGraphicsRootDescriptorTable(4, displacementSrvHandle);
 
         mCommandList->DrawIndexedInstanced(submesh.indexCount, 1, submesh.startIndiceIndex, 0, 0);
     }
@@ -475,6 +478,9 @@ void BoxApp::buildRootSignature() {
     CD3DX12_DESCRIPTOR_RANGE cbvRange;
     cbvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0);
 
+    CD3DX12_DESCRIPTOR_RANGE passCbvRange;
+    passCbvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 1);
+
     CD3DX12_DESCRIPTOR_RANGE srvRange;
     srvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
 
@@ -484,11 +490,12 @@ void BoxApp::buildRootSignature() {
     CD3DX12_DESCRIPTOR_RANGE displacementSrvRange;
     displacementSrvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2);
 
-    CD3DX12_ROOT_PARAMETER slotRootParameter[4];
+    CD3DX12_ROOT_PARAMETER slotRootParameter[5];
     slotRootParameter[0].InitAsDescriptorTable(1, &cbvRange, D3D12_SHADER_VISIBILITY_ALL);
-    slotRootParameter[1].InitAsDescriptorTable(1, &srvRange, D3D12_SHADER_VISIBILITY_PIXEL);
-    slotRootParameter[2].InitAsDescriptorTable(1, &normalSrvRange, D3D12_SHADER_VISIBILITY_PIXEL);
-    slotRootParameter[3].InitAsDescriptorTable(1, &displacementSrvRange, D3D12_SHADER_VISIBILITY_ALL);
+    slotRootParameter[1].InitAsDescriptorTable(1, &passCbvRange, D3D12_SHADER_VISIBILITY_ALL);
+    slotRootParameter[2].InitAsDescriptorTable(1, &srvRange, D3D12_SHADER_VISIBILITY_PIXEL);
+    slotRootParameter[3].InitAsDescriptorTable(1, &normalSrvRange, D3D12_SHADER_VISIBILITY_PIXEL);
+    slotRootParameter[4].InitAsDescriptorTable(1, &displacementSrvRange, D3D12_SHADER_VISIBILITY_ALL);
 
     CD3DX12_STATIC_SAMPLER_DESC staticSampler(0,
         D3D12_FILTER_MIN_MAG_MIP_LINEAR,
@@ -496,7 +503,7 @@ void BoxApp::buildRootSignature() {
         D3D12_TEXTURE_ADDRESS_MODE_WRAP,
         D3D12_TEXTURE_ADDRESS_MODE_WRAP);
 
-    CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(4, slotRootParameter, 1, &staticSampler,
+    CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(5, slotRootParameter, 1, &staticSampler,
         D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
     ComPtr<ID3DBlob> serializedRootSig;

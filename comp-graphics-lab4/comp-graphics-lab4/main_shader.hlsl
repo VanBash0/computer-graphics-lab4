@@ -7,6 +7,14 @@ cbuffer cbPerObject : register(b0)
     float3 gPadding;
 };
 
+cbuffer cbPass : register(b1)
+{
+    float4x4 gInvViewProj;
+    float3 gEyePosW;
+    float gPassPadding;
+    float4 gAmbientColor;
+};
+
 Texture2D gDiffuseMap : register(t0);
 Texture2D gNormalMap : register(t1);
 Texture2D gDisplacementMap : register(t2);
@@ -84,8 +92,18 @@ TessControlPoint VS_Tess(VertexIn vin)
 PatchTess PatchHS(InputPatch<TessControlPoint, 3> patch, uint patchId : SV_PrimitiveID)
 {
     PatchTess pt;
-    // Keep factor constant for now; prepared for future camera-distance based LOD.
-    const float tessFactor = 8.0f;
+    float3 patchCenterL = (patch[0].PosL + patch[1].PosL + patch[2].PosL) / 3.0f;
+    float3 patchCenterW = mul(float4(patchCenterL, 1.0f), gWorld).xyz;
+    float distanceToCamera = distance(patchCenterW, gEyePosW);
+
+    const float nearDistance = 4.0f;
+    const float farDistance = 30.0f;
+    const float maxTessFactor = 12.0f;
+    const float minTessFactor = 2.0f;
+
+    float lod = saturate((distanceToCamera - nearDistance) / (farDistance - nearDistance));
+    float tessFactor = lerp(maxTessFactor, minTessFactor, lod);
+    
     pt.EdgeTess[0] = tessFactor;
     pt.EdgeTess[1] = tessFactor;
     pt.EdgeTess[2] = tessFactor;
@@ -133,7 +151,7 @@ VertexOut DS(PatchTess patchTess, float3 bary : SV_DomainLocation, const OutputP
 
     const float displacementScale = .4f;
     float displacement = gDisplacementMap.SampleLevel(gSampler, texC, 0).r;
-    posL += normalL * (displacement * displacementScale);
+    posL += normalL * (displacement * gPadding.z);
 
     float4 posW = mul(float4(posL, 1.0f), gWorld);
     vout.NormalW = mul(normalL, (float3x3) gWorld);
