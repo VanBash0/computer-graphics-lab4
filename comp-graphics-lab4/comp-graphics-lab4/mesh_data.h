@@ -25,6 +25,8 @@ struct Submesh {
     UINT startIndiceIndex = 0;
     UINT startVerticeIndex = 0;
     Material material;
+    UINT objectCbvHeapIndex = 0;
+    float maxTessellationFactor = 10.0f;
 };
 
 struct MeshData {

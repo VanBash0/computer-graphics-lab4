@@ -58,7 +58,7 @@ namespace {
         }
     }
 
-    void appendMesh(MeshData& destination, const MeshData& source) {
+    void appendMesh(MeshData& destination, const MeshData& source, float maxTessFactor) {
         const UINT vertexOffset = static_cast<UINT>(destination.vertices.size());
         const UINT indexOffset = static_cast<UINT>(destination.indices.size());
 
@@ -74,6 +74,7 @@ namespace {
             Submesh submesh(sourceSubmesh);
             submesh.startIndiceIndex += indexOffset;
             submesh.startVerticeIndex += vertexOffset;
+            submesh.maxTessellationFactor = maxTessFactor;
             destination.submeshes.push_back(submesh);
         }
     }
@@ -115,8 +116,11 @@ void BoxApp::buildBuffers() {
     ModelLoader earthLoader(1.0f);
     MeshData earthMesh = earthLoader.loadModel("Earth.fbx");
     rotateMeshX(earthMesh, XM_PI);
-    transformMesh(earthMesh, EARTH_SCALE, XMFLOAT3(0.0f, 30.0f, 0.0f));
-    appendMesh(mesh, earthMesh);
+    transformMesh(earthMesh, EARTH_SCALE, XMFLOAT3(-25.0f, 30.0f, 0.0f));
+    appendMesh(mesh, earthMesh, 10.f);
+
+    transformMesh(earthMesh, 1.f, XMFLOAT3(50.0f, 0.0f, 0.0f));
+    appendMesh(mesh, earthMesh, 1.f);
 
     const UINT vbByteSize = static_cast<UINT>(mesh.vertices.size() * sizeof(Vertex));
     const UINT ibByteSize = static_cast<UINT>(mesh.indices.size() * sizeof(uint32_t));
@@ -129,7 +133,8 @@ void BoxApp::buildBuffers() {
 
     UINT indexOffset = 0;
     UINT vertexOffset = 0;
-    for (const auto& sm : mesh.submeshes) {
+    for (size_t i = 0; i < mesh.submeshes.size(); ++i) {
+        const auto& sm = mesh.submeshes[i];
         Submesh submesh(sm);
         mSubmeshes.push_back(submesh);
     }
@@ -155,7 +160,7 @@ void BoxApp::buildBuffers() {
 
 void BoxApp::buildConstantBuffer()
 {
-    mObjectCB = new UploadBuffer<ObjectConstants>(md3dDevice.Get(), 2, true);
+    mObjectCB = new UploadBuffer<ObjectConstants>(md3dDevice.Get(), static_cast<UINT>(mSubmeshes.size()), true);
     mPassCB = new UploadBuffer<PassConstants>(md3dDevice.Get(), 1, true);
     mLightingCB = new UploadBuffer<LightingConstants>(md3dDevice.Get(), 1, true);
 }
@@ -267,27 +272,24 @@ void BoxApp::update(const GameTimer& gt) {
     XMMATRIX proj = XMLoadFloat4x4(&mProj);
     XMMATRIX worldViewProj = world * view * proj;
 
-    ObjectConstants objConstantsNoAnim = {};
-    XMStoreFloat4x4(&objConstantsNoAnim.WorldViewProj, XMMatrixTranspose(worldViewProj));
-    XMStoreFloat4x4(&objConstantsNoAnim.World, XMMatrixTranspose(world));
-
     XMMATRIX texScale = XMMatrixScaling(TEXTURE_SCALE.x, TEXTURE_SCALE.y, TEXTURE_SCALE.z);
-    XMStoreFloat4x4(&objConstantsNoAnim.TextureTransform, XMMatrixTranspose(texScale));
+    for (size_t i = 0; i < mSubmeshes.size(); ++i) {
+        const Submesh& submesh = mSubmeshes[i];
+        const bool isColumn = isColumnSubmesh(submesh);
 
-    objConstantsNoAnim.TotalTime = gt.getTotalTime();
-    objConstantsNoAnim.Padding = XMFLOAT3(mEnableColumnVertexAnimation ? 1.0f : 0.0f,
-        mEnableColumnTextureAnimation ? 1.0f : 0.0f, DISPLACEMENT_SCALE);
+        ObjectConstants objConstants = {};
+        XMStoreFloat4x4(&objConstants.WorldViewProj, XMMatrixTranspose(worldViewProj));
+        XMStoreFloat4x4(&objConstants.World, XMMatrixTranspose(world));
+        XMStoreFloat4x4(&objConstants.TextureTransform, XMMatrixTranspose(texScale));
 
-    mObjectCB->copyData(0, objConstantsNoAnim);
+        objConstants.TotalTime = isColumn ? gt.getTotalTime() : 0.0f;
+        objConstants.VertexAnimationEnabled = isColumn && mEnableColumnVertexAnimation ? 1.0f : 0.0f;
+        objConstants.TextureAnimationEnabled = isColumn && mEnableColumnTextureAnimation ? 1.0f : 0.0f;
+        objConstants.DisplacementScale = DISPLACEMENT_SCALE;
+        objConstants.MaxTessellationFactor = submesh.maxTessellationFactor;
 
-    ObjectConstants objConstantsStatic = {};
-    XMStoreFloat4x4(&objConstantsStatic.WorldViewProj, XMMatrixTranspose(worldViewProj));
-    XMStoreFloat4x4(&objConstantsStatic.World, XMMatrixTranspose(world));
-    XMStoreFloat4x4(&objConstantsStatic.TextureTransform, XMMatrixTranspose(texScale));
-    objConstantsStatic.TotalTime = 0.0f;
-    objConstantsStatic.Padding = XMFLOAT3(0.0f, 0.0f, DISPLACEMENT_SCALE);
-
-    mObjectCB->copyData(1, objConstantsStatic);
+        mObjectCB->copyData(static_cast<int>(i), objConstants);
+    }
 
     XMMATRIX viewProj = view * proj;
     XMMATRIX invViewProj = XMMatrixInverse(nullptr, viewProj);
@@ -399,7 +401,8 @@ void BoxApp::draw(const GameTimer& gt)
     mCommandList->IASetVertexBuffers(0, 1, &mVertexBufferView);
     mCommandList->IASetIndexBuffer(&mIndexBufferView);
 
-    for (const auto& submesh : mSubmeshes) {
+    for (size_t i = 0; i < mSubmeshes.size(); ++i) {
+        const auto& submesh = mSubmeshes[i];
         const bool isColumn = isColumnSubmesh(submesh);
         const bool useTessellation = !isColumn && hasDisplacementTexture(submesh);
 
@@ -414,10 +417,10 @@ void BoxApp::draw(const GameTimer& gt)
 
 
         CD3DX12_GPU_DESCRIPTOR_HANDLE cbvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart());
-        cbvHandle.Offset(isColumn ? 0 : 1, mCbvSrvDescriptorSize);
+        cbvHandle.Offset(submesh.objectCbvHeapIndex, mCbvSrvDescriptorSize);
         mCommandList->SetGraphicsRootDescriptorTable(0, cbvHandle);
 
-        CD3DX12_GPU_DESCRIPTOR_HANDLE passCbvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart(), 2, mCbvSrvDescriptorSize);
+        CD3DX12_GPU_DESCRIPTOR_HANDLE passCbvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart(), getPassCbvIndex(), mCbvSrvDescriptorSize);
         mCommandList->SetGraphicsRootDescriptorTable(1, passCbvHandle);
 
         CD3DX12_GPU_DESCRIPTOR_HANDLE srvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart());
@@ -445,13 +448,13 @@ void BoxApp::draw(const GameTimer& gt)
     mCommandList->SetGraphicsRootSignature(mLightingRootSignature.Get());
     mCommandList->SetPipelineState(mLightingPSO.Get());
 
-    CD3DX12_GPU_DESCRIPTOR_HANDLE passCbvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart(), 2, mCbvSrvDescriptorSize);
+    CD3DX12_GPU_DESCRIPTOR_HANDLE passCbvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart(), getPassCbvIndex(), mCbvSrvDescriptorSize);
     mCommandList->SetGraphicsRootDescriptorTable(0, passCbvHandle);
 
     CD3DX12_GPU_DESCRIPTOR_HANDLE gbufferSrvHandle = mRenderingSystem->getGBuffer()->getSrvHandle();
     mCommandList->SetGraphicsRootDescriptorTable(1, gbufferSrvHandle);
 
-    CD3DX12_GPU_DESCRIPTOR_HANDLE lightingCbvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart(), 3, mCbvSrvDescriptorSize);
+    CD3DX12_GPU_DESCRIPTOR_HANDLE lightingCbvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart(), getLightingCbvIndex(), mCbvSrvDescriptorSize);
     mCommandList->SetGraphicsRootDescriptorTable(2, lightingCbvHandle);
 
     mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -660,7 +663,8 @@ void BoxApp::loadTextures() {
 
 void BoxApp::buildCbvSrvHeap() {
     UINT numTextures = static_cast<UINT>(mTextures.size());
-    UINT numDescriptors = 7 + GBuffer::mTexturesNum + numTextures;
+    const UINT objectCbvCount = static_cast<UINT>(mSubmeshes.size());
+    UINT numDescriptors = objectCbvCount + 2 + GBuffer::mTexturesNum + 3 + numTextures;
 
     D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
     heapDesc.NumDescriptors = numDescriptors;
@@ -676,32 +680,34 @@ void BoxApp::buildCbvSrvHeap() {
     D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
     cbvDesc.BufferLocation = mObjectCB->getResource()->GetGPUVirtualAddress();
     cbvDesc.SizeInBytes = D3DUtil::calcConstantBufferByteSize(sizeof(ObjectConstants));
-    md3dDevice->CreateConstantBufferView(&cbvDesc, handle);
+    for (size_t i = 0; i < mSubmeshes.size(); ++i) {
+        auto& submesh = mSubmeshes[i];
+        md3dDevice->CreateConstantBufferView(&cbvDesc, handle);
+        submesh.objectCbvHeapIndex = static_cast<UINT>(i);
+        handle.Offset(1, mCbvSrvDescriptorSize);
+        cbvDesc.BufferLocation += cbvDesc.SizeInBytes;
+    }
 
-    handle.Offset(1, mCbvSrvDescriptorSize);
-    cbvDesc.BufferLocation += cbvDesc.SizeInBytes;
-    md3dDevice->CreateConstantBufferView(&cbvDesc, handle);
-
-    handle.Offset(1, mCbvSrvDescriptorSize);
     cbvDesc.BufferLocation = mPassCB->getResource()->GetGPUVirtualAddress();
     cbvDesc.SizeInBytes = D3DUtil::calcConstantBufferByteSize(sizeof(PassConstants));
     md3dDevice->CreateConstantBufferView(&cbvDesc, handle);
-
     handle.Offset(1, mCbvSrvDescriptorSize);
+
     cbvDesc.BufferLocation = mLightingCB->getResource()->GetGPUVirtualAddress();
     cbvDesc.SizeInBytes = D3DUtil::calcConstantBufferByteSize(sizeof(LightingConstants));
     md3dDevice->CreateConstantBufferView(&cbvDesc, handle);
+    handle.Offset(1, mCbvSrvDescriptorSize);
 
     mRenderingSystem = std::make_unique<RenderingSystem>(md3dDevice.Get(), mClientWidth, mClientHeight);
 
-    CD3DX12_CPU_DESCRIPTOR_HANDLE gbufferSrvStart(mCbvSrvHeap->GetCPUDescriptorHandleForHeapStart(), 4, mCbvSrvDescriptorSize);
-    CD3DX12_GPU_DESCRIPTOR_HANDLE gbufferGpuSrvStart(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart(), 4, mCbvSrvDescriptorSize);
+    CD3DX12_CPU_DESCRIPTOR_HANDLE gbufferSrvStart(mCbvSrvHeap->GetCPUDescriptorHandleForHeapStart(), getGBufferSrvStartIndex(), mCbvSrvDescriptorSize);
+    CD3DX12_GPU_DESCRIPTOR_HANDLE gbufferGpuSrvStart(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart(), getGBufferSrvStartIndex(), mCbvSrvDescriptorSize);
 
     CD3DX12_CPU_DESCRIPTOR_HANDLE gbufferRtvStart(mRtvHeap->GetCPUDescriptorHandleForHeapStart(), swapChainBufferCount, mRtvDescriptorSize);
 
     mRenderingSystem->buildDescriptors(gbufferSrvStart, gbufferGpuSrvStart, gbufferRtvStart, mCbvSrvDescriptorSize, mRtvDescriptorSize);
 
-    handle.Offset(1 + GBuffer::mTexturesNum, mCbvSrvDescriptorSize);
+    handle = CD3DX12_CPU_DESCRIPTOR_HANDLE(mCbvSrvHeap->GetCPUDescriptorHandleForHeapStart(), getDefaultTextureSrvStartIndex(), mCbvSrvDescriptorSize);
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
     srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -716,7 +722,7 @@ void BoxApp::buildCbvSrvHeap() {
     handle.Offset(1, mCbvSrvDescriptorSize);
     md3dDevice->CreateShaderResourceView(mDefaultDisplacementTex.Get(), &srvDesc, handle);
 
-    UINT i = 7 + GBuffer::mTexturesNum;
+    UINT i = getDefaultTextureSrvStartIndex() + 3;
     for (auto& kv : mTextures) {
         Texture* texture = kv.second.get();
         srvDesc.Format = texture->resource->GetDesc().Format;
@@ -735,9 +741,9 @@ void BoxApp::bindMaterialsToTextures() {
         const std::string& texName = submesh.material.diffuseTextureName;
         const std::string& normalTexName = submesh.material.normalTextureName;
         const std::string& displacementTexName = submesh.material.displacementTextureName;
-        const UINT defaultDiffuseSrvIndex = 4 + GBuffer::mTexturesNum;
-        const UINT defaultNormalSrvIndex = 5 + GBuffer::mTexturesNum;
-        const UINT defaultDisplacementSrvIndex = 6 + GBuffer::mTexturesNum;
+        const UINT defaultDiffuseSrvIndex = getDefaultTextureSrvStartIndex();
+        const UINT defaultNormalSrvIndex = getDefaultTextureSrvStartIndex() + 1;
+        const UINT defaultDisplacementSrvIndex = getDefaultTextureSrvStartIndex() + 2;
         if (texName.empty()) {
             submesh.material.diffuseSrvHeapIndex = defaultDiffuseSrvIndex;
         }
@@ -762,6 +768,22 @@ void BoxApp::bindMaterialsToTextures() {
             submesh.material.displacementSrvHeapIndex = (it != mTextures.end()) ? it->second->srvHeapIndex : defaultDisplacementSrvIndex;
         }
     }
+}
+
+UINT BoxApp::getPassCbvIndex() const {
+    return static_cast<UINT>(mSubmeshes.size());
+}
+
+UINT BoxApp::getLightingCbvIndex() const {
+    return getPassCbvIndex() + 1;
+}
+
+UINT BoxApp::getGBufferSrvStartIndex() const {
+    return getLightingCbvIndex() + 1;
+}
+
+UINT BoxApp::getDefaultTextureSrvStartIndex() const {
+    return getGBufferSrvStartIndex() + GBuffer::mTexturesNum;
 }
 
 void BoxApp::createDefaultTextures() {

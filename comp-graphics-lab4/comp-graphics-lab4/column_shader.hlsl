@@ -4,6 +4,10 @@ cbuffer cbPerObject : register(b0)
     float4x4 gWorld;
     float4x4 gTexTransform;
     float gTotalTime;
+    float gVertexAnimationEnabled;
+    float gTextureAnimationEnabled;
+    float gDisplacementScale;
+    float gMaxTessellationFactor;
     float3 gPadding;
 };
 
@@ -44,8 +48,8 @@ VertexOut VS(VertexIn vin)
     float frequency = .5f;
     float amplitude = 2.f;
 
-    float vertexAnimEnabled = gPadding.x;
-    float textureAnimEnabled = gPadding.y;
+    float vertexAnimEnabled = gVertexAnimationEnabled;
+    float textureAnimEnabled = gTextureAnimationEnabled;
 
     float swing = sin(gTotalTime * speed + vin.PosL.y * frequency) * amplitude * vertexAnimEnabled;
     float3 newPos = vin.PosL;

@@ -4,6 +4,10 @@ cbuffer cbPerObject : register(b0)
     float4x4 gWorld;
     float4x4 gTexTransform;
     float gTotalTime;
+    float gVertexAnimationEnabled;
+    float gTextureAnimationEnabled;
+    float gDisplacementScale;
+    float gMaxTessellationFactor;
     float3 gPadding;
 };
 
@@ -98,8 +102,8 @@ PatchTess PatchHS(InputPatch<TessControlPoint, 3> patch, uint patchId : SV_Primi
 
     const float nearDistance = 4.0f;
     const float farDistance = 30.0f;
-    const float maxTessFactor = 12.0f;
-    const float minTessFactor = 2.0f;
+    const float maxTessFactor = gMaxTessellationFactor;
+    const float minTessFactor = 1.0f;
 
     float lod = saturate((distanceToCamera - nearDistance) / (farDistance - nearDistance));
     float tessFactor = lerp(maxTessFactor, minTessFactor, lod);
@@ -151,7 +155,7 @@ VertexOut DS(PatchTess patchTess, float3 bary : SV_DomainLocation, const OutputP
 
     const float displacementScale = .4f;
     float displacement = gDisplacementMap.SampleLevel(gSampler, texC, 0).r;
-    posL += normalL * (displacement * gPadding.z);
+    posL += normalL * (displacement * gDisplacementScale);
 
     float4 posW = mul(float4(posL, 1.0f), gWorld);
     vout.NormalW = mul(normalL, (float3x3) gWorld);

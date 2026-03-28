@@ -20,7 +20,11 @@ struct ObjectConstants {
     XMFLOAT4X4 World;
     XMFLOAT4X4 TextureTransform;
     float TotalTime;
-    XMFLOAT3 Padding;
+    float VertexAnimationEnabled;
+    float TextureAnimationEnabled;
+    float DisplacementScale;
+    float MaxTessellationFactor;
+    XMFLOAT3 Padding = { 0.0f, 0.0f, 0.0f };
 };
 
 struct PassConstants {
@@ -88,6 +92,11 @@ private:
     void loadTextures();
     void buildCbvSrvHeap();
     void bindMaterialsToTextures();
+
+    UINT getPassCbvIndex() const;
+    UINT getLightingCbvIndex() const;
+    UINT getGBufferSrvStartIndex() const;
+    UINT getDefaultTextureSrvStartIndex() const;
 
     void update(const GameTimer& gt) override;
     void draw(const GameTimer& gt) override;
