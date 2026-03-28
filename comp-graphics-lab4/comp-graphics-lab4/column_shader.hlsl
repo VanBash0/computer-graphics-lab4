@@ -8,20 +8,25 @@ cbuffer cbPerObject : register(b0)
 };
 
 Texture2D gDiffuseMap : register(t0);
+Texture2D gNormalMap : register(t1);
 SamplerState gSampler : register(s0);
 
 struct VertexIn
 {
-    float3 PosL: POSITION;
-    float3 NormalL: NORMAL;
-    float2 TexC: TEXCOORD;
+    float3 PosL : POSITION;
+    float3 NormalL : NORMAL;
+    float3 TangentL : TANGENT;
+    float3 BitangentL : BINORMAL;
+    float2 TexC : TEXCOORD;
 };
 
 struct VertexOut
 {
-    float4 PosH: SV_POSITION;
-    float3 NormalW: NORMAL;
-    float2 TexC: TEXCOORD;
+    float4 PosH : SV_POSITION;
+    float3 NormalW : NORMAL;
+    float3 TangentW : TANGENT;
+    float3 BitangentW : BINORMAL;
+    float2 TexC : TEXCOORD;
 };
 
 struct GBufferOut
@@ -47,7 +52,9 @@ VertexOut VS(VertexIn vin)
     newPos.x += swing * (vin.PosL.y * 0.1f);
 
     float4 posW = mul(float4(newPos, 1.0f), gWorld);
-    vout.NormalW = mul(vin.NormalL, (float3x3)gWorld);
+    vout.NormalW = mul(vin.NormalL, (float3x3) gWorld);
+    vout.TangentW = mul(vin.TangentL, (float3x3) gWorld);
+    vout.BitangentW = mul(vin.BitangentL, (float3x3) gWorld);
     vout.PosH = mul(posW, gWorldViewProj);
 
     float4 texC = mul(float4(vin.TexC, 0.0f, 1.0f), gTexTransform);
@@ -68,10 +75,15 @@ GBufferOut PS(VertexOut pin)
 {
     GBufferOut gout;
     float3 normalW = normalize(pin.NormalW);
+    float3 tangentW = normalize(pin.TangentW - dot(pin.TangentW, normalW) * normalW);
+    float3 bitangentW = normalize(pin.BitangentW - dot(pin.BitangentW, normalW) * normalW);
+
+    float3 normalTS = gNormalMap.Sample(gSampler, pin.TexC).xyz * 2.0f - 1.0f;
+    float3 mappedNormalW = normalize(normalTS.x * tangentW + normalTS.y * bitangentW + normalTS.z * normalW);
 
     float4 texColor = gDiffuseMap.Sample(gSampler, pin.TexC);
     gout.Albedo = texColor;
-    gout.Normal = float4(normalW * 0.5f + 0.5f, 1.0f);
+    gout.Normal = float4(mappedNormalW * 0.5f + 0.5f, 1.0f);
     gout.Depth = pin.PosH.z;
 
     return gout;

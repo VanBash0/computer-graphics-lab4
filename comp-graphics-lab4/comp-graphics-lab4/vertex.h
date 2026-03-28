@@ -8,6 +8,8 @@ using namespace DirectX::SimpleMath;
 struct Vertex {
     Vector3 position;
     Vector3 normal;
+    Vector3 tangent;
+    Vector3 bitangent;
     Vector2 texCoord;
 };
 

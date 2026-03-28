@@ -18,6 +18,65 @@ namespace {
     bool isColumnSubmesh(const Submesh& submesh) {
         return submesh.material.diffuseTextureName.find("column") != std::string::npos;
     }
+
+    bool hasDisplacementTexture(const Submesh& submesh) {
+        return submesh.material.displacementTextureName.find("Earth_") != std::string::npos;
+    }
+
+    void transformMesh(MeshData& mesh, float scale, const XMFLOAT3& offset) {
+        for (auto& vertex : mesh.vertices) {
+            vertex.position.x = vertex.position.x * scale + offset.x;
+            vertex.position.y = vertex.position.y * scale + offset.y;
+            vertex.position.z = vertex.position.z * scale + offset.z;
+        }
+    }
+
+    void rotateMeshX(MeshData& mesh, float angleRadians) {
+        const float cosAngle = std::cos(angleRadians);
+        const float sinAngle = std::sin(angleRadians);
+
+        for (auto& vertex : mesh.vertices) {
+            const float y = vertex.position.y;
+            const float z = vertex.position.z;
+            vertex.position.y = y * cosAngle - z * sinAngle;
+            vertex.position.z = y * sinAngle + z * cosAngle;
+
+            const float ny = vertex.normal.y;
+            const float nz = vertex.normal.z;
+            vertex.normal.y = ny * cosAngle - nz * sinAngle;
+            vertex.normal.z = ny * sinAngle + nz * cosAngle;
+
+            const float ty = vertex.tangent.y;
+            const float tz = vertex.tangent.z;
+            vertex.tangent.y = ty * cosAngle - tz * sinAngle;
+            vertex.tangent.z = ty * sinAngle + tz * cosAngle;
+
+            const float by = vertex.bitangent.y;
+            const float bz = vertex.bitangent.z;
+            vertex.bitangent.y = by * cosAngle - bz * sinAngle;
+            vertex.bitangent.z = by * sinAngle + bz * cosAngle;
+        }
+    }
+
+    void appendMesh(MeshData& destination, const MeshData& source) {
+        const UINT vertexOffset = static_cast<UINT>(destination.vertices.size());
+        const UINT indexOffset = static_cast<UINT>(destination.indices.size());
+
+        destination.vertices.insert(destination.vertices.end(), source.vertices.begin(), source.vertices.end());
+
+        destination.indices.reserve(destination.indices.size() + source.indices.size());
+        for (uint32_t index : source.indices) {
+            destination.indices.push_back(vertexOffset + index);
+        }
+
+        destination.submeshes.reserve(destination.submeshes.size() + source.submeshes.size());
+        for (const auto& sourceSubmesh : source.submeshes) {
+            Submesh submesh(sourceSubmesh);
+            submesh.startIndiceIndex += indexOffset;
+            submesh.startVerticeIndex += vertexOffset;
+            destination.submeshes.push_back(submesh);
+        }
+    }
 }
 
 void BoxApp::buildResources() {
@@ -29,9 +88,11 @@ void BoxApp::buildResources() {
     buildRootSignature();
     buildLightingRootSignature();
     buildConstantBuffer();
+    createDefaultTextures();
     buildCbvSrvHeap();
     bindMaterialsToTextures();
     buildPso(L"main_shader.hlsl", mPSO);
+    buildPso(L"main_shader.hlsl", mEarthTessPSO, true);
     buildPso(L"column_shader.hlsl", mColumnPSO);
     buildPso(L"lighting_shader.hlsl", mLightingPSO);
     failCheck(mCommandList->Close());
@@ -48,8 +109,14 @@ void BoxApp::setObjectSize(Vertex& vertex, float scale) {
 }
 
 void BoxApp::buildBuffers() {
-    ModelLoader loader(SCENE_SCALE);
+    ModelLoader loader(SPONZA_SCALE);
     MeshData mesh = loader.loadModel("sponza.obj");
+
+    ModelLoader earthLoader(1.0f);
+    MeshData earthMesh = earthLoader.loadModel("Earth.fbx");
+    rotateMeshX(earthMesh, XM_PI);
+    transformMesh(earthMesh, EARTH_SCALE, XMFLOAT3(0.0f, 30.0f, 0.0f));
+    appendMesh(mesh, earthMesh);
 
     const UINT vbByteSize = static_cast<UINT>(mesh.vertices.size() * sizeof(Vertex));
     const UINT ibByteSize = static_cast<UINT>(mesh.indices.size() * sizeof(uint32_t));
@@ -70,7 +137,9 @@ void BoxApp::buildBuffers() {
     mInputLayout = {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
         { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        { "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "BINORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 36, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 48, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
     };
 
     mVertexBufferView.BufferLocation = mVertexBufferGPU->GetGPUVirtualAddress();
@@ -207,7 +276,7 @@ void BoxApp::update(const GameTimer& gt) {
 
     objConstantsNoAnim.TotalTime = gt.getTotalTime();
     objConstantsNoAnim.Padding = XMFLOAT3(mEnableColumnVertexAnimation ? 1.0f : 0.0f,
-        mEnableColumnTextureAnimation ? 1.0f : 0.0f, 0.0f);
+        mEnableColumnTextureAnimation ? 1.0f : 0.0f, DISPLACEMENT_SCALE);
 
     mObjectCB->copyData(0, objConstantsNoAnim);
 
@@ -216,7 +285,7 @@ void BoxApp::update(const GameTimer& gt) {
     XMStoreFloat4x4(&objConstantsStatic.World, XMMatrixTranspose(world));
     XMStoreFloat4x4(&objConstantsStatic.TextureTransform, XMMatrixTranspose(texScale));
     objConstantsStatic.TotalTime = 0.0f;
-    objConstantsStatic.Padding = XMFLOAT3(0.0f, 0.0f, 0.0f);
+    objConstantsStatic.Padding = XMFLOAT3(0.0f, 0.0f, DISPLACEMENT_SCALE);
 
     mObjectCB->copyData(1, objConstantsStatic);
 
@@ -327,22 +396,41 @@ void BoxApp::draw(const GameTimer& gt)
     mRenderingSystem->beginGeometryPass(mCommandList.Get(), getDepthStencilView());
 
     mCommandList->SetGraphicsRootSignature(mRootSignature.Get());
-    mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     mCommandList->IASetVertexBuffers(0, 1, &mVertexBufferView);
     mCommandList->IASetIndexBuffer(&mIndexBufferView);
 
     for (const auto& submesh : mSubmeshes) {
         const bool isColumn = isColumnSubmesh(submesh);
+        const bool useTessellation = !isColumn && hasDisplacementTexture(submesh);
 
-        mCommandList->SetPipelineState(isColumn ? mColumnPSO.Get() : mPSO.Get());
+        if (useTessellation) {
+            mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST);
+            mCommandList->SetPipelineState(mEarthTessPSO.Get());
+        }
+        else {
+            mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            mCommandList->SetPipelineState(isColumn ? mColumnPSO.Get() : mPSO.Get());
+        }
+
 
         CD3DX12_GPU_DESCRIPTOR_HANDLE cbvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart());
         cbvHandle.Offset(isColumn ? 0 : 1, mCbvSrvDescriptorSize);
         mCommandList->SetGraphicsRootDescriptorTable(0, cbvHandle);
 
+        CD3DX12_GPU_DESCRIPTOR_HANDLE passCbvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart(), 2, mCbvSrvDescriptorSize);
+        mCommandList->SetGraphicsRootDescriptorTable(1, passCbvHandle);
+
         CD3DX12_GPU_DESCRIPTOR_HANDLE srvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart());
         srvHandle.Offset(submesh.material.diffuseSrvHeapIndex, mCbvSrvDescriptorSize);
-        mCommandList->SetGraphicsRootDescriptorTable(1, srvHandle);
+        mCommandList->SetGraphicsRootDescriptorTable(2, srvHandle);
+
+        CD3DX12_GPU_DESCRIPTOR_HANDLE normalSrvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart());
+        normalSrvHandle.Offset(submesh.material.normalSrvHeapIndex, mCbvSrvDescriptorSize);
+        mCommandList->SetGraphicsRootDescriptorTable(3, normalSrvHandle);
+
+        CD3DX12_GPU_DESCRIPTOR_HANDLE displacementSrvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart());
+        displacementSrvHandle.Offset(submesh.material.displacementSrvHeapIndex, mCbvSrvDescriptorSize);
+        mCommandList->SetGraphicsRootDescriptorTable(4, displacementSrvHandle);
 
         mCommandList->DrawIndexedInstanced(submesh.indexCount, 1, submesh.startIndiceIndex, 0, 0);
     }
@@ -390,12 +478,24 @@ void BoxApp::buildRootSignature() {
     CD3DX12_DESCRIPTOR_RANGE cbvRange;
     cbvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0);
 
+    CD3DX12_DESCRIPTOR_RANGE passCbvRange;
+    passCbvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 1);
+
     CD3DX12_DESCRIPTOR_RANGE srvRange;
     srvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
 
-    CD3DX12_ROOT_PARAMETER slotRootParameter[2];
+    CD3DX12_DESCRIPTOR_RANGE normalSrvRange;
+    normalSrvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1);
+
+    CD3DX12_DESCRIPTOR_RANGE displacementSrvRange;
+    displacementSrvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2);
+
+    CD3DX12_ROOT_PARAMETER slotRootParameter[5];
     slotRootParameter[0].InitAsDescriptorTable(1, &cbvRange, D3D12_SHADER_VISIBILITY_ALL);
-    slotRootParameter[1].InitAsDescriptorTable(1, &srvRange, D3D12_SHADER_VISIBILITY_PIXEL);
+    slotRootParameter[1].InitAsDescriptorTable(1, &passCbvRange, D3D12_SHADER_VISIBILITY_ALL);
+    slotRootParameter[2].InitAsDescriptorTable(1, &srvRange, D3D12_SHADER_VISIBILITY_PIXEL);
+    slotRootParameter[3].InitAsDescriptorTable(1, &normalSrvRange, D3D12_SHADER_VISIBILITY_PIXEL);
+    slotRootParameter[4].InitAsDescriptorTable(1, &displacementSrvRange, D3D12_SHADER_VISIBILITY_ALL);
 
     CD3DX12_STATIC_SAMPLER_DESC staticSampler(0,
         D3D12_FILTER_MIN_MAG_MIP_LINEAR,
@@ -403,7 +503,7 @@ void BoxApp::buildRootSignature() {
         D3D12_TEXTURE_ADDRESS_MODE_WRAP,
         D3D12_TEXTURE_ADDRESS_MODE_WRAP);
 
-    CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(2, slotRootParameter, 1, &staticSampler,
+    CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(5, slotRootParameter, 1, &staticSampler,
         D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
     ComPtr<ID3DBlob> serializedRootSig;
@@ -456,12 +556,18 @@ void BoxApp::buildLightingRootSignature() {
         IID_PPV_ARGS(&mLightingRootSignature)));
 }
 
-void BoxApp::buildPso(const std::wstring& shaderName, ComPtr<ID3D12PipelineState>& pso) {
+void BoxApp::buildPso(const std::wstring& shaderName, ComPtr<ID3D12PipelineState>& pso, bool enableTessellation) {
     ComPtr<ID3DBlob> mvsByteCode;
     ComPtr<ID3DBlob> mpsByteCode;
+    ComPtr<ID3DBlob> mhsByteCode;
+    ComPtr<ID3DBlob> mdsByteCode;
 
-    mvsByteCode = D3DUtil::compileShader(shaderName, nullptr, "VS", "vs_5_0");
+    mvsByteCode = D3DUtil::compileShader(shaderName, nullptr, enableTessellation ? "VS_Tess" : "VS", "vs_5_0");
     mpsByteCode = D3DUtil::compileShader(shaderName, nullptr, "PS", "ps_5_0");
+    if (enableTessellation) {
+        mhsByteCode = D3DUtil::compileShader(shaderName, nullptr, "HS", "hs_5_0");
+        mdsByteCode = D3DUtil::compileShader(shaderName, nullptr, "DS", "ds_5_0");
+    }
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
     ZeroMemory(&psoDesc, sizeof(D3D12_GRAPHICS_PIPELINE_STATE_DESC));
@@ -479,11 +585,22 @@ void BoxApp::buildPso(const std::wstring& shaderName, ComPtr<ID3D12PipelineState
         mpsByteCode->GetBufferSize()
     };
 
+    if (enableTessellation) {
+        psoDesc.HS = {
+            reinterpret_cast<BYTE*>(mhsByteCode->GetBufferPointer()),
+            mhsByteCode->GetBufferSize()
+        };
+        psoDesc.DS = {
+            reinterpret_cast<BYTE*>(mdsByteCode->GetBufferPointer()),
+            mdsByteCode->GetBufferSize()
+        };
+    }
+
     psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
     psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
     psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
     psoDesc.SampleMask = UINT_MAX;
-    psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    psoDesc.PrimitiveTopologyType = enableTessellation ? D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH : D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     if (isLightingPass) {
         psoDesc.NumRenderTargets = 1;
         psoDesc.RTVFormats[0] = mBackBufferFormat;
@@ -517,30 +634,33 @@ void BoxApp::onResize() {
 }
 
 void BoxApp::loadTextures() {
-    const std::wstring textureDir = L"sponza/";
-    for (auto& entry : std::filesystem::directory_iterator(textureDir)) {
-        if (!entry.is_regular_file())
-            continue;
+    const auto loadTextureDirectory = [this](const std::wstring& textureDir) {
+        for (auto& entry : std::filesystem::directory_iterator(textureDir)) {
+            if (!entry.is_regular_file())
+                continue;
 
-        auto path = entry.path();
+            auto path = entry.path();
+            if (path.extension() != L".dds")
+                continue;
 
-        if (path.extension() != L".dds")
-            continue;
+            std::unique_ptr<Texture> texture = std::make_unique<Texture>();
+            texture->fileName = path.stem().wstring();
+            texture->filePath = path.wstring();
 
-        std::unique_ptr<Texture> texture = std::make_unique<Texture>();
-        texture->fileName = path.stem().wstring();
-        texture->filePath = path.wstring();
+            failCheck(DirectX::CreateDDSTextureFromFile12(md3dDevice.Get(), mCommandList.Get(),
+                texture->filePath.c_str(), texture->resource, texture->uploadHeap));
 
-        failCheck(DirectX::CreateDDSTextureFromFile12(md3dDevice.Get(), mCommandList.Get(),
-            texture->filePath.c_str(), texture->resource, texture->uploadHeap));
+            mTextures[texture->fileName] = std::move(texture);
+        }
+        };
 
-        mTextures[texture->fileName] = std::move(texture);
-    }
+    loadTextureDirectory(L"sponza/");
+    loadTextureDirectory(L"earth/");
 }
 
 void BoxApp::buildCbvSrvHeap() {
     UINT numTextures = static_cast<UINT>(mTextures.size());
-    UINT numDescriptors = 4 + GBuffer::mTexturesNum + numTextures;
+    UINT numDescriptors = 7 + GBuffer::mTexturesNum + numTextures;
 
     D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
     heapDesc.NumDescriptors = numDescriptors;
@@ -588,9 +708,15 @@ void BoxApp::buildCbvSrvHeap() {
     srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     srvDesc.Texture2D.MostDetailedMip = 0;
     srvDesc.Texture2D.MipLevels = 1;
-    md3dDevice->CreateShaderResourceView(mDefaultTex.Get(), &srvDesc, handle);
+    md3dDevice->CreateShaderResourceView(mDefaultDiffuseTex.Get(), &srvDesc, handle);
 
-    UINT i = 4 + GBuffer::mTexturesNum;
+    handle.Offset(1, mCbvSrvDescriptorSize);
+    md3dDevice->CreateShaderResourceView(mDefaultNormalTex.Get(), &srvDesc, handle);
+
+    handle.Offset(1, mCbvSrvDescriptorSize);
+    md3dDevice->CreateShaderResourceView(mDefaultDisplacementTex.Get(), &srvDesc, handle);
+
+    UINT i = 7 + GBuffer::mTexturesNum;
     for (auto& kv : mTextures) {
         Texture* texture = kv.second.get();
         srvDesc.Format = texture->resource->GetDesc().Format;
@@ -607,52 +733,78 @@ void BoxApp::buildCbvSrvHeap() {
 void BoxApp::bindMaterialsToTextures() {
     for (auto& submesh : mSubmeshes) {
         const std::string& texName = submesh.material.diffuseTextureName;
+        const std::string& normalTexName = submesh.material.normalTextureName;
+        const std::string& displacementTexName = submesh.material.displacementTextureName;
+        const UINT defaultDiffuseSrvIndex = 4 + GBuffer::mTexturesNum;
+        const UINT defaultNormalSrvIndex = 5 + GBuffer::mTexturesNum;
+        const UINT defaultDisplacementSrvIndex = 6 + GBuffer::mTexturesNum;
         if (texName.empty()) {
-            submesh.material.diffuseSrvHeapIndex = 4 + GBuffer::mTexturesNum;
-            continue;
+            submesh.material.diffuseSrvHeapIndex = defaultDiffuseSrvIndex;
         }
-        auto it = mTextures.find(std::wstring(texName.begin(), texName.end()));
-        submesh.material.diffuseSrvHeapIndex = (it != mTextures.end()) ? it->second->srvHeapIndex : (4 + GBuffer::mTexturesNum);
+        else {
+            auto it = mTextures.find(std::wstring(texName.begin(), texName.end()));
+            submesh.material.diffuseSrvHeapIndex = (it != mTextures.end()) ? it->second->srvHeapIndex : defaultDiffuseSrvIndex;
+        }
+
+        if (normalTexName.empty()) {
+            submesh.material.normalSrvHeapIndex = defaultNormalSrvIndex;
+        }
+        else {
+            auto it = mTextures.find(std::wstring(normalTexName.begin(), normalTexName.end()));
+            submesh.material.normalSrvHeapIndex = (it != mTextures.end()) ? it->second->srvHeapIndex : defaultNormalSrvIndex;
+        }
+
+        if (displacementTexName.empty()) {
+            submesh.material.displacementSrvHeapIndex = defaultDisplacementSrvIndex;
+        }
+        else {
+            auto it = mTextures.find(std::wstring(displacementTexName.begin(), displacementTexName.end()));
+            submesh.material.displacementSrvHeapIndex = (it != mTextures.end()) ? it->second->srvHeapIndex : defaultDisplacementSrvIndex;
+        }
     }
 }
 
-void BoxApp::createDefaultTexture() {
-    D3D12_RESOURCE_DESC texDesc = {};
-    texDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-    texDesc.Alignment = 0;
-    texDesc.Width = 1;
-    texDesc.Height = 1;
-    texDesc.DepthOrArraySize = 1;
-    texDesc.MipLevels = 1;
-    texDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    texDesc.SampleDesc.Count = 1;
-    texDesc.SampleDesc.Quality = 0;
-    texDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-    texDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+void BoxApp::createDefaultTextures() {
+    const auto createSolidTexture = [this](uint32_t color, ComPtr<ID3D12Resource>& textureResource, ComPtr<ID3D12Resource>& uploadResource) {
+        D3D12_RESOURCE_DESC texDesc = {};
+        texDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        texDesc.Alignment = 0;
+        texDesc.Width = 1;
+        texDesc.Height = 1;
+        texDesc.DepthOrArraySize = 1;
+        texDesc.MipLevels = 1;
+        texDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        texDesc.SampleDesc.Count = 1;
+        texDesc.SampleDesc.Quality = 0;
+        texDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+        texDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
-    CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_DEFAULT);
-    failCheck(md3dDevice->CreateCommittedResource(
-        &heapProps, D3D12_HEAP_FLAG_NONE, &texDesc,
-        D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&mDefaultTex)));
+        CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_DEFAULT);
+        failCheck(md3dDevice->CreateCommittedResource(
+            &heapProps, D3D12_HEAP_FLAG_NONE, &texDesc,
+            D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&textureResource)));
 
-    const UINT64 uploadBufferSize = GetRequiredIntermediateSize(mDefaultTex.Get(), 0, 1);
-    ComPtr<ID3D12Resource> textureUploadHeap;
-    CD3DX12_HEAP_PROPERTIES uploadHeapProps(D3D12_HEAP_TYPE_UPLOAD);
-    CD3DX12_RESOURCE_DESC bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize);
+        const UINT64 uploadBufferSize = GetRequiredIntermediateSize(textureResource.Get(), 0, 1);
+        CD3DX12_HEAP_PROPERTIES uploadHeapProps(D3D12_HEAP_TYPE_UPLOAD);
+        CD3DX12_RESOURCE_DESC bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize);
 
-    failCheck(md3dDevice->CreateCommittedResource(
-        &uploadHeapProps, D3D12_HEAP_FLAG_NONE, &bufferDesc,
-        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&textureUploadHeap)));
+        failCheck(md3dDevice->CreateCommittedResource(
+            &uploadHeapProps, D3D12_HEAP_FLAG_NONE, &bufferDesc,
+            D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&uploadResource)));
 
-    uint32_t whiteColor = 0xffffffff;
-    D3D12_SUBRESOURCE_DATA texData = {};
-    texData.pData = &whiteColor;
-    texData.RowPitch = 4;
-    texData.SlicePitch = texData.RowPitch;
+        D3D12_SUBRESOURCE_DATA texData = {};
+        texData.pData = &color;
+        texData.RowPitch = 4;
+        texData.SlicePitch = texData.RowPitch;
 
-    UpdateSubresources(mCommandList.Get(), mDefaultTex.Get(), textureUploadHeap.Get(), 0, 0, 1, &texData);
+        UpdateSubresources(mCommandList.Get(), textureResource.Get(), uploadResource.Get(), 0, 0, 1, &texData);
 
-    CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-        mDefaultTex.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-    mCommandList->ResourceBarrier(1, &barrier);
+        CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            textureResource.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        mCommandList->ResourceBarrier(1, &barrier);
+        };
+
+    createSolidTexture(0xffffffff, mDefaultDiffuseTex, mDefaultDiffuseTexUpload);
+    createSolidTexture(0xffff8080, mDefaultNormalTex, mDefaultNormalTexUpload);
+    createSolidTexture(0xff000000, mDefaultDisplacementTex, mDefaultDisplacementTexUpload);
 }
