@@ -164,6 +164,7 @@ private:
 
     bool mEnableColumnVertexAnimation = true;
     bool mEnableColumnTextureAnimation = true;
+    bool mEnableFrustumCulling = true;
 };
 
 #endif // BOX_APP_H

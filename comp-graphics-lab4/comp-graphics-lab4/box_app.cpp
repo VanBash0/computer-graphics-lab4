@@ -266,6 +266,9 @@ void BoxApp::update(const GameTimer& gt) {
     if (GetAsyncKeyState('2') & 0x0001) {
         mEnableColumnTextureAnimation = !mEnableColumnTextureAnimation;
     }
+    if (GetAsyncKeyState('F') & 0x0001) {
+        mEnableFrustumCulling = !mEnableFrustumCulling;
+    }
 
     float dt = gt.getDeltaTime();
     float speed = SPEED_FACTOR * dt;
@@ -438,7 +441,16 @@ void BoxApp::draw(const GameTimer& gt)
     mCommandList->IASetVertexBuffers(0, 1, &mVertexBufferView);
     mCommandList->IASetIndexBuffer(&mIndexBufferView);
 
-    const std::vector<size_t> visibleSubmeshIndices = collectVisibleSubmeshes();
+    std::vector<size_t> visibleSubmeshIndices;
+    if (mEnableFrustumCulling) {
+        visibleSubmeshIndices = collectVisibleSubmeshes();
+    }
+    else {
+        visibleSubmeshIndices.reserve(mSubmeshes.size());
+        for (size_t submeshIndex = 0; submeshIndex < mSubmeshes.size(); ++submeshIndex) {
+            visibleSubmeshIndices.push_back(submeshIndex);
+        }
+    }
     for (size_t submeshIndex : visibleSubmeshIndices) {
         const auto& submesh = mSubmeshes[submeshIndex];
         const bool isColumn = isColumnSubmesh(submesh);
