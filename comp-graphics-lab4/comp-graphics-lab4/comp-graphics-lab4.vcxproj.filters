@@ -42,9 +42,13 @@
     <ClCompile Include="gbuffer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="octree.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
+    <None Include="lighting_shader.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="d3dapp.h">
@@ -84,6 +88,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="rendering_system.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="octree.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

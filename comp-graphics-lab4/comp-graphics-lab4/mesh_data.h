@@ -3,7 +3,7 @@
 
 #include "vertex.h"
 
-#include <SimpleMath.h>
+#include <DirectXCollision.h>
 #include <vector>
 
 struct Material {
@@ -24,6 +24,7 @@ struct Submesh {
     UINT indexCount = 0;
     UINT startIndiceIndex = 0;
     UINT startVerticeIndex = 0;
+    DirectX::BoundingBox bounds = {};
     Material material;
     UINT objectCbvHeapIndex = 0;
     float maxTessellationFactor = 10.0f;

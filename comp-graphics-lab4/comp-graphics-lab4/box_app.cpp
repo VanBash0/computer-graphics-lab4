@@ -9,6 +9,7 @@
 #include <assimp/postprocess.h>
 
 #include <DirectXColors.h>
+#include <DirectXCollision.h>
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
@@ -136,8 +137,19 @@ void BoxApp::buildBuffers() {
     for (size_t i = 0; i < mesh.submeshes.size(); ++i) {
         const auto& sm = mesh.submeshes[i];
         Submesh submesh(sm);
+
+        const UINT nextSubmeshStartVertex = (i + 1 < mesh.submeshes.size())
+            ? mesh.submeshes[i + 1].startVerticeIndex
+            : static_cast<UINT>(mesh.vertices.size());
+        const UINT submeshVertexCount = nextSubmeshStartVertex - submesh.startVerticeIndex;
+        const Vertex* submeshVertices = mesh.vertices.data() + submesh.startVerticeIndex;
+        BoundingBox::CreateFromPoints(submesh.bounds, submeshVertexCount,
+            &submeshVertices[0].position, sizeof(Vertex));
+
         mSubmeshes.push_back(submesh);
     }
+
+    buildOctree(mesh);
 
     mInputLayout = {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
@@ -156,6 +168,31 @@ void BoxApp::buildBuffers() {
     mIndexBufferView.SizeInBytes = ibByteSize;
 
     mIndexCount = static_cast<UINT>(mesh.indices.size());
+}
+
+void BoxApp::buildOctree(const MeshData& mesh) {
+    std::vector<Octree::Entry> entries;
+    entries.reserve(mesh.submeshes.size());
+
+    for (size_t submeshIndex = 0; submeshIndex < mesh.submeshes.size(); ++submeshIndex) {
+        entries.push_back({ submeshIndex, mSubmeshes[submeshIndex].bounds });
+    }
+
+    mSceneOctree.rebuild(entries, 24, 8);
+}
+
+std::vector<size_t> BoxApp::collectVisibleSubmeshes() const {
+    XMMATRIX view = XMLoadFloat4x4(&mView);
+    XMMATRIX proj = XMLoadFloat4x4(&mProj);
+
+    BoundingFrustum viewSpaceFrustum;
+    BoundingFrustum::CreateFromMatrix(viewSpaceFrustum, proj);
+
+    BoundingFrustum worldFrustum;
+    const XMMATRIX invView = XMMatrixInverse(nullptr, view);
+    viewSpaceFrustum.Transform(worldFrustum, invView);
+
+    return mSceneOctree.query(worldFrustum);
 }
 
 void BoxApp::buildConstantBuffer()
@@ -401,8 +438,9 @@ void BoxApp::draw(const GameTimer& gt)
     mCommandList->IASetVertexBuffers(0, 1, &mVertexBufferView);
     mCommandList->IASetIndexBuffer(&mIndexBufferView);
 
-    for (size_t i = 0; i < mSubmeshes.size(); ++i) {
-        const auto& submesh = mSubmeshes[i];
+    const std::vector<size_t> visibleSubmeshIndices = collectVisibleSubmeshes();
+    for (size_t submeshIndex : visibleSubmeshIndices) {
+        const auto& submesh = mSubmeshes[submeshIndex];
         const bool isColumn = isColumnSubmesh(submesh);
         const bool useTessellation = !isColumn && hasDisplacementTexture(submesh);
 

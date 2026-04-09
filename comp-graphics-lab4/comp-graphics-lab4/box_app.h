@@ -8,6 +8,7 @@
 #include "model_loader.h"
 #include "texture.h"
 #include "rendering_system.h"
+#include "octree.h"
 
 #include <DirectXColors.h>
 #include <DirectXMath.h>
@@ -92,6 +93,8 @@ private:
     void loadTextures();
     void buildCbvSrvHeap();
     void bindMaterialsToTextures();
+    void buildOctree(const MeshData& mesh);
+    std::vector<size_t> collectVisibleSubmeshes() const;
 
     UINT getPassCbvIndex() const;
     UINT getLightingCbvIndex() const;
@@ -147,6 +150,7 @@ private:
     D3D12_INDEX_BUFFER_VIEW mIndexBufferView;
 
     std::vector<Submesh> mSubmeshes;
+    Octree mSceneOctree;
     std::vector<LightData> mLights;
     std::vector<SwingingSpotLight> mSwingingSpotLights;
     std::unordered_map<std::wstring, std::unique_ptr<Texture>> mTextures;
