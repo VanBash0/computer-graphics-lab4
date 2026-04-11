@@ -93,7 +93,7 @@ private:
     void loadTextures();
     void buildCbvSrvHeap();
     void bindMaterialsToTextures();
-    void buildOctree(const MeshData& mesh);
+    void buildOctree();
     std::vector<size_t> collectVisibleSubmeshes() const;
 
     UINT getPassCbvIndex() const;
@@ -150,6 +150,7 @@ private:
     D3D12_INDEX_BUFFER_VIEW mIndexBufferView;
 
     std::vector<Submesh> mSubmeshes;
+    std::vector<XMFLOAT4X4> mSubmeshWorlds;
     Octree mSceneOctree;
     std::vector<LightData> mLights;
     std::vector<SwingingSpotLight> mSwingingSpotLights;

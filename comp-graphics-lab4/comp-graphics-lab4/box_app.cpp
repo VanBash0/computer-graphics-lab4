@@ -16,6 +16,8 @@
 #include <unordered_map>
 
 namespace {
+    constexpr UINT EARTH_INSTANCE_COUNT = 1000;
+
     bool isColumnSubmesh(const Submesh& submesh) {
         return submesh.material.diffuseTextureName.find("column") != std::string::npos;
     }
@@ -117,11 +119,11 @@ void BoxApp::buildBuffers() {
     ModelLoader earthLoader(1.0f);
     MeshData earthMesh = earthLoader.loadModel("Earth.fbx");
     rotateMeshX(earthMesh, XM_PI);
-    transformMesh(earthMesh, EARTH_SCALE, XMFLOAT3(-25.0f, 30.0f, 0.0f));
+    transformMesh(earthMesh, EARTH_SCALE, XMFLOAT3(0.f, 0.f, 0.f));
     appendMesh(mesh, earthMesh, 10.f);
 
-    transformMesh(earthMesh, 1.f, XMFLOAT3(50.0f, 0.0f, 0.0f));
-    appendMesh(mesh, earthMesh, 1.f);
+    //transformMesh(earthMesh, 1.f, XMFLOAT3(50.0f, 0.0f, 0.0f));
+    //appendMesh(mesh, earthMesh, 1.f);
 
     const UINT vbByteSize = static_cast<UINT>(mesh.vertices.size() * sizeof(Vertex));
     const UINT ibByteSize = static_cast<UINT>(mesh.indices.size() * sizeof(uint32_t));
@@ -132,8 +134,11 @@ void BoxApp::buildBuffers() {
     mIndexBufferGPU = D3DUtil::createDefaultBuffer(md3dDevice.Get(), mCommandList.Get(),
         mesh.indices.data(), ibByteSize, mIndexBufferUploader);
 
-    UINT indexOffset = 0;
-    UINT vertexOffset = 0;
+    mSubmeshes.clear();
+    mSubmeshWorlds.clear();
+    std::vector<Submesh> earthSubmeshTemplates;
+    earthSubmeshTemplates.reserve(earthMesh.submeshes.size());
+
     for (size_t i = 0; i < mesh.submeshes.size(); ++i) {
         const auto& sm = mesh.submeshes[i];
         Submesh submesh(sm);
@@ -146,10 +151,46 @@ void BoxApp::buildBuffers() {
         BoundingBox::CreateFromPoints(submesh.bounds, submeshVertexCount,
             &submeshVertices[0].position, sizeof(Vertex));
 
+        if (hasDisplacementTexture(submesh)) {
+            earthSubmeshTemplates.push_back(submesh);
+            continue;
+        }
+
         mSubmeshes.push_back(submesh);
+        XMFLOAT4X4 identity;
+        XMStoreFloat4x4(&identity, XMMatrixIdentity());
     }
 
-    buildOctree(mesh);
+    const UINT earthRows = 25;
+    const UINT earthColumns = 40;
+    const float earthSpacing = 16.f;
+    const float earthHeight = 30.f;
+
+    mSubmeshes.reserve(mSubmeshes.size() + earthSubmeshTemplates.size() * EARTH_INSTANCE_COUNT);
+    mSubmeshWorlds.reserve(mSubmeshWorlds.size() + earthSubmeshTemplates.size() * EARTH_INSTANCE_COUNT);
+
+    for (UINT earthIndex = 0; earthIndex < EARTH_INSTANCE_COUNT; ++earthIndex) {
+        const UINT row = earthIndex / earthColumns;
+        const UINT column = earthIndex % earthColumns;
+
+        const float x = (static_cast<float>(column) - (earthColumns - 1) * 0.5f) * earthSpacing;
+        const float z = (static_cast<float>(row) - (earthColumns - 1) * 0.5f) * earthSpacing;
+        const float y = earthHeight + 8.f * std::sin(static_cast<float>(earthIndex) * 0.15f);
+
+        const XMMATRIX worldMatrix = XMMatrixTranslation(x, y, z);
+        XMFLOAT4X4 worldTransform;
+        XMStoreFloat4x4(&worldTransform, worldMatrix);
+
+        for (const auto& earthTemplate : earthSubmeshTemplates) {
+            Submesh instanceSubmesh(earthTemplate);
+            earthTemplate.bounds.Transform(instanceSubmesh.bounds, worldMatrix);
+            instanceSubmesh.maxTessellationFactor = 1.f;
+            mSubmeshes.push_back(instanceSubmesh);
+            mSubmeshWorlds.push_back(worldTransform);
+        }
+    }
+
+    buildOctree();
 
     mInputLayout = {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
@@ -170,11 +211,11 @@ void BoxApp::buildBuffers() {
     mIndexCount = static_cast<UINT>(mesh.indices.size());
 }
 
-void BoxApp::buildOctree(const MeshData& mesh) {
+void BoxApp::buildOctree() {
     std::vector<Octree::Entry> entries;
-    entries.reserve(mesh.submeshes.size());
+    entries.reserve(mSubmeshes.size());
 
-    for (size_t submeshIndex = 0; submeshIndex < mesh.submeshes.size(); ++submeshIndex) {
+    for (size_t submeshIndex = 0; submeshIndex < mSubmeshes.size(); ++submeshIndex) {
         entries.push_back({ submeshIndex, mSubmeshes[submeshIndex].bounds });
     }
 
@@ -308,14 +349,14 @@ void BoxApp::update(const GameTimer& gt) {
     XMMATRIX view = XMMatrixLookAtLH(pos, target, up);
     XMStoreFloat4x4(&mView, view);
 
-    XMMATRIX world = XMLoadFloat4x4(&mWorld);
     XMMATRIX proj = XMLoadFloat4x4(&mProj);
-    XMMATRIX worldViewProj = world * view * proj;
 
     XMMATRIX texScale = XMMatrixScaling(TEXTURE_SCALE.x, TEXTURE_SCALE.y, TEXTURE_SCALE.z);
     for (size_t i = 0; i < mSubmeshes.size(); ++i) {
         const Submesh& submesh = mSubmeshes[i];
         const bool isColumn = isColumnSubmesh(submesh);
+        const XMMATRIX world = XMLoadFloat4x4(&mSubmeshWorlds[i]);
+        const XMMATRIX worldViewProj = world * view * proj;
 
         ObjectConstants objConstants = {};
         XMStoreFloat4x4(&objConstants.WorldViewProj, XMMatrixTranspose(worldViewProj));
