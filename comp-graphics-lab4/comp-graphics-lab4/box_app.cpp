@@ -16,7 +16,7 @@
 #include <unordered_map>
 
 namespace {
-    constexpr UINT EARTH_INSTANCE_COUNT = 1000;
+    constexpr UINT EARTH_INSTANCE_COUNT = 100;
 
     bool isColumnSubmesh(const Submesh& submesh) {
         return submesh.material.diffuseTextureName.find("column") != std::string::npos;
@@ -122,9 +122,6 @@ void BoxApp::buildBuffers() {
     transformMesh(earthMesh, EARTH_SCALE, XMFLOAT3(0.f, 0.f, 0.f));
     appendMesh(mesh, earthMesh, 10.f);
 
-    //transformMesh(earthMesh, 1.f, XMFLOAT3(50.0f, 0.0f, 0.0f));
-    //appendMesh(mesh, earthMesh, 1.f);
-
     const UINT vbByteSize = static_cast<UINT>(mesh.vertices.size() * sizeof(Vertex));
     const UINT ibByteSize = static_cast<UINT>(mesh.indices.size() * sizeof(uint32_t));
 
@@ -159,12 +156,13 @@ void BoxApp::buildBuffers() {
         mSubmeshes.push_back(submesh);
         XMFLOAT4X4 identity;
         XMStoreFloat4x4(&identity, XMMatrixIdentity());
+        mSubmeshWorlds.push_back(identity);
     }
 
     const UINT earthRows = 25;
     const UINT earthColumns = 40;
-    const float earthSpacing = 16.f;
-    const float earthHeight = 30.f;
+    const float earthSpacing = 16.0f;
+    const float earthHeight = 30.0f;
 
     mSubmeshes.reserve(mSubmeshes.size() + earthSubmeshTemplates.size() * EARTH_INSTANCE_COUNT);
     mSubmeshWorlds.reserve(mSubmeshWorlds.size() + earthSubmeshTemplates.size() * EARTH_INSTANCE_COUNT);
@@ -174,8 +172,8 @@ void BoxApp::buildBuffers() {
         const UINT column = earthIndex % earthColumns;
 
         const float x = (static_cast<float>(column) - (earthColumns - 1) * 0.5f) * earthSpacing;
-        const float z = (static_cast<float>(row) - (earthColumns - 1) * 0.5f) * earthSpacing;
-        const float y = earthHeight + 8.f * std::sin(static_cast<float>(earthIndex) * 0.15f);
+        const float z = (static_cast<float>(row) - (earthRows - 1) * 0.5f) * earthSpacing;
+        const float y = earthHeight + 8.0f;
 
         const XMMATRIX worldMatrix = XMMatrixTranslation(x, y, z);
         XMFLOAT4X4 worldTransform;
@@ -184,7 +182,7 @@ void BoxApp::buildBuffers() {
         for (const auto& earthTemplate : earthSubmeshTemplates) {
             Submesh instanceSubmesh(earthTemplate);
             earthTemplate.bounds.Transform(instanceSubmesh.bounds, worldMatrix);
-            instanceSubmesh.maxTessellationFactor = 1.f;
+            instanceSubmesh.maxTessellationFactor = 1.0f;
             mSubmeshes.push_back(instanceSubmesh);
             mSubmeshWorlds.push_back(worldTransform);
         }
