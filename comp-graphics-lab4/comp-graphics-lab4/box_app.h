@@ -81,6 +81,8 @@ private:
     const float EARTH_SCALE = 0.1f;
     const float SPEED_FACTOR = 10.f;
     const float DISPLACEMENT_SCALE = 0.4f;
+    const float EARTH_BILLBOARD_SWITCH_DISTANCE = 60.0f;
+    const float BILLBOARD_SIZE = 10.0f;
     const Vector3 TEXTURE_SCALE = Vector3(1.f, 1.f, 1.f);
     void setObjectSize(Vertex& vertex, float scale);
 
@@ -134,7 +136,7 @@ private:
     XMFLOAT4X4 mView;
     XMFLOAT4X4 mProj;
 
-    DirectX::XMFLOAT3 mEyePos = { 0.0f, 2.0f, -10.0f };
+    DirectX::XMFLOAT3 mEyePos = { 0.0f, 12.0f, -10.0f };
     DirectX::XMFLOAT3 mLook = { 0.0f, 0.0f, 1.0f };
     DirectX::XMFLOAT3 mRight = { 1.0f, 0.0f, 0.0f };
     DirectX::XMFLOAT3 mUp = { 0.0f, 1.0f, 0.0f };
@@ -162,6 +164,11 @@ private:
     ComPtr<ID3D12Resource> mDefaultNormalTexUpload = nullptr;
     ComPtr<ID3D12Resource> mDefaultDisplacementTexUpload = nullptr;
     std::unique_ptr<RenderingSystem> mRenderingSystem;
+
+    size_t mBillboardIndex = static_cast<size_t>(-1);
+    DirectX::XMFLOAT3 mEarthPosition = { 0.0f, 12.0f, 0.0f };
+    DirectX::XMFLOAT3 mEarthBillboardPosition = { 0.0f, 24.0f, 0.0f };
+    std::vector<size_t> mEarthSubmeshIndices;
 
     bool mEnableColumnVertexAnimation = true;
     bool mEnableColumnTextureAnimation = true;

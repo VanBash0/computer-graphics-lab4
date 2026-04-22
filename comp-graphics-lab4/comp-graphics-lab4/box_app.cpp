@@ -16,8 +16,6 @@
 #include <unordered_map>
 
 namespace {
-    constexpr UINT EARTH_INSTANCE_COUNT = 100;
-
     bool isColumnSubmesh(const Submesh& submesh) {
         return submesh.material.diffuseTextureName.find("column") != std::string::npos;
     }
@@ -122,6 +120,23 @@ void BoxApp::buildBuffers() {
     transformMesh(earthMesh, EARTH_SCALE, XMFLOAT3(0.f, 0.f, 0.f));
     appendMesh(mesh, earthMesh, 10.f);
 
+    MeshData billboardMesh;
+    billboardMesh.vertices.resize(4);
+    billboardMesh.vertices[0] = { {-BILLBOARD_SIZE, -BILLBOARD_SIZE, 0.0f}, {0.0f, 0.0f, -1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, -1.0f, 0.0f}, {0.0f, 1.0f} };
+    billboardMesh.vertices[1] = { {-BILLBOARD_SIZE,  BILLBOARD_SIZE, 0.0f}, {0.0f, 0.0f, -1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, -1.0f, 0.0f}, {0.0f, 0.0f} };
+    billboardMesh.vertices[2] = { { BILLBOARD_SIZE,  BILLBOARD_SIZE, 0.0f}, {0.0f, 0.0f, -1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, -1.0f, 0.0f}, {1.0f, 0.0f} };
+    billboardMesh.vertices[3] = { { BILLBOARD_SIZE, -BILLBOARD_SIZE, 0.0f}, {0.0f, 0.0f, -1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, -1.0f, 0.0f}, {1.0f, 1.0f} };
+    billboardMesh.indices = { 0, 1, 2, 0, 2, 3 };
+
+    Submesh bmSubmesh;
+    bmSubmesh.startVerticeIndex = 0;
+    bmSubmesh.startIndiceIndex = 0;
+    bmSubmesh.indexCount = 6;
+    bmSubmesh.material.diffuseTextureName = "billboard";
+    billboardMesh.submeshes.push_back(bmSubmesh);
+
+    appendMesh(mesh, billboardMesh, 1.0f);
+
     const UINT vbByteSize = static_cast<UINT>(mesh.vertices.size() * sizeof(Vertex));
     const UINT ibByteSize = static_cast<UINT>(mesh.indices.size() * sizeof(uint32_t));
 
@@ -153,39 +168,33 @@ void BoxApp::buildBuffers() {
             continue;
         }
 
+        bool isBillboard = (submesh.material.diffuseTextureName == "billboard");
+        if (isBillboard) {
+            submesh.bounds.Center = mEarthPosition;
+            submesh.bounds.Extents = XMFLOAT3(BILLBOARD_SIZE * 1.5f, BILLBOARD_SIZE * 1.5f, BILLBOARD_SIZE * 1.5f);
+            mBillboardIndex = mSubmeshes.size();
+        }
+
         mSubmeshes.push_back(submesh);
         XMFLOAT4X4 identity;
         XMStoreFloat4x4(&identity, XMMatrixIdentity());
         mSubmeshWorlds.push_back(identity);
     }
 
-    const UINT earthRows = 25;
-    const UINT earthColumns = 40;
-    const float earthSpacing = 16.0f;
-    const float earthHeight = 30.0f;
+    mEarthSubmeshIndices.clear();
+    mEarthSubmeshIndices.reserve(earthSubmeshTemplates.size());
 
-    mSubmeshes.reserve(mSubmeshes.size() + earthSubmeshTemplates.size() * EARTH_INSTANCE_COUNT);
-    mSubmeshWorlds.reserve(mSubmeshWorlds.size() + earthSubmeshTemplates.size() * EARTH_INSTANCE_COUNT);
+    const XMMATRIX earthWorldMatrix = XMMatrixTranslation(mEarthPosition.x, mEarthPosition.y, mEarthPosition.z);
+    XMFLOAT4X4 earthWorldTransform;
+    XMStoreFloat4x4(&earthWorldTransform, earthWorldMatrix);
 
-    for (UINT earthIndex = 0; earthIndex < EARTH_INSTANCE_COUNT; ++earthIndex) {
-        const UINT row = earthIndex / earthColumns;
-        const UINT column = earthIndex % earthColumns;
-
-        const float x = (static_cast<float>(column) - (earthColumns - 1) * 0.5f) * earthSpacing;
-        const float z = (static_cast<float>(row) - (earthRows - 1) * 0.5f) * earthSpacing;
-        const float y = earthHeight + 8.0f;
-
-        const XMMATRIX worldMatrix = XMMatrixTranslation(x, y, z);
-        XMFLOAT4X4 worldTransform;
-        XMStoreFloat4x4(&worldTransform, worldMatrix);
-
-        for (const auto& earthTemplate : earthSubmeshTemplates) {
-            Submesh instanceSubmesh(earthTemplate);
-            earthTemplate.bounds.Transform(instanceSubmesh.bounds, worldMatrix);
-            instanceSubmesh.maxTessellationFactor = 1.0f;
-            mSubmeshes.push_back(instanceSubmesh);
-            mSubmeshWorlds.push_back(worldTransform);
-        }
+    for (const auto& earthTemplate : earthSubmeshTemplates) {
+        Submesh earthSubmesh(earthTemplate);
+        earthTemplate.bounds.Transform(earthSubmesh.bounds, earthWorldMatrix);
+        earthSubmesh.maxTessellationFactor = 1.0f;
+        mEarthSubmeshIndices.push_back(mSubmeshes.size());
+        mSubmeshes.push_back(earthSubmesh);
+        mSubmeshWorlds.push_back(earthWorldTransform);
     }
 
     buildOctree();
@@ -347,6 +356,20 @@ void BoxApp::update(const GameTimer& gt) {
     XMMATRIX view = XMMatrixLookAtLH(pos, target, up);
     XMStoreFloat4x4(&mView, view);
 
+    if (mBillboardIndex != static_cast<size_t>(-1)) {
+        XMVECTOR camPos = XMLoadFloat3(&mEyePos);
+        XMVECTOR billPos = XMLoadFloat3(&mEarthBillboardPosition);
+        XMVECTOR upVec = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+
+        XMVECTOR forward = XMVectorSubtract(billPos, camPos);
+        XMVECTOR target = XMVectorAdd(billPos, forward);
+
+        XMMATRIX billboardView = XMMatrixLookAtLH(billPos, target, upVec);
+        XMMATRIX billboardWorld = XMMatrixInverse(nullptr, billboardView);
+
+        XMStoreFloat4x4(&mSubmeshWorlds[mBillboardIndex], billboardWorld);
+    }
+
     XMMATRIX proj = XMLoadFloat4x4(&mProj);
 
     XMMATRIX texScale = XMMatrixScaling(TEXTURE_SCALE.x, TEXTURE_SCALE.y, TEXTURE_SCALE.z);
@@ -490,8 +513,21 @@ void BoxApp::draw(const GameTimer& gt)
             visibleSubmeshIndices.push_back(submeshIndex);
         }
     }
+    const float earthDistance = XMVectorGetX(XMVector3Length(XMVectorSubtract(XMLoadFloat3(&mEyePos), XMLoadFloat3(&mEarthPosition))));
+    const bool drawEarthMesh = earthDistance <= EARTH_BILLBOARD_SWITCH_DISTANCE;
+
     for (size_t submeshIndex : visibleSubmeshIndices) {
         const auto& submesh = mSubmeshes[submeshIndex];
+        const bool isBillboard = (submeshIndex == mBillboardIndex);
+        const bool isEarthSubmesh = std::binary_search(mEarthSubmeshIndices.begin(), mEarthSubmeshIndices.end(), submeshIndex);
+
+        if (isBillboard && drawEarthMesh) {
+            continue;
+        }
+        if (isEarthSubmesh && !drawEarthMesh) {
+            continue;
+        }
+
         const bool isColumn = isColumnSubmesh(submesh);
         const bool useTessellation = !isColumn && hasDisplacementTexture(submesh);
 

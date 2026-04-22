@@ -72,7 +72,7 @@ VertexOut VS(VertexIn vin)
     vout.NormalW = mul(vin.NormalL, (float3x3) gWorld);
     vout.TangentW = mul(vin.TangentL, (float3x3) gWorld);
     vout.BitangentW = mul(vin.BitangentL, (float3x3) gWorld);
-    vout.PosH = mul(posW, gWorldViewProj);
+    vout.PosH = mul(float4(vin.PosL, 1.0f), gWorldViewProj);
 
     float4 texC = mul(float4(vin.TexC, 0.0f, 1.0f), gTexTransform);
     vout.TexC = texC.xy;
@@ -178,6 +178,8 @@ GBufferOut PS(VertexOut pin)
     float3 mappedNormalW = normalize(normalTS.x * tangentW + normalTS.y * bitangentW + normalTS.z * normalW);
 
     float4 texColor = gDiffuseMap.Sample(gSampler, pin.TexC);
+    clip(texColor.a - 0.1f);
+    
     gout.Albedo = texColor;
     gout.Normal = float4(mappedNormalW * 0.5f + 0.5f, 1.0f);
     gout.Depth = pin.PosH.z;
