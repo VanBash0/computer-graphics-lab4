@@ -12,27 +12,22 @@ struct Particle
 cbuffer ParticleSimCB : register(b0)
 {
     float3 gEmitterPosition;
-    float3 gInitialVelocity;
     float gInitialSize;
-    float4 gInitialColor;
-    
+    float3 gInitialVelocity;
     float gDeltaTime;
-    float gTotalTime;
-    
+    float4 gInitialColor;
     float3 gCameraPosition;
-    
+    float gTotalTime;
     float gMinLifetime;
     float gMaxLifetime;
-    
     uint gEmitCount;
-    
-    float3 gPadding;
-}
+    float gPadding0;
+};
 
 RWStructuredBuffer<Particle> g_ParticlePool : register(u0);
 AppendStructuredBuffer<uint> g_DeadListAppend : register(u1);
-ConsumeStructuredBuffer<uint> g_DeadListConsume : register(t1);
-RWStructuredBuffer<float2> g_SortList : register(u2);
+ConsumeStructuredBuffer<uint> g_DeadListConsume : register(u2);
+RWStructuredBuffer<float2> g_SortList : register(u3);
 
 float rand01(uint seed)
 {

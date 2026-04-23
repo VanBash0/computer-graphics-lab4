@@ -30,6 +30,8 @@ struct ObjectConstants {
 
 struct PassConstants {
     XMFLOAT4X4 InvViewProj;
+    XMFLOAT4X4 View;
+    XMFLOAT4X4 Proj;
     XMFLOAT3 EyePosW;
     float Padding = 0.0f;
     XMFLOAT4 AmbientColor;
@@ -70,6 +72,20 @@ struct SwingingSpotLight {
     float PhaseOffset = 0.0f;
 };
 
+struct ParticleSimConstants {
+    XMFLOAT3 EmitterPosition = { 0.0f, 10.0f, 0.0f };
+    float InitialSize = 0.35f;
+    XMFLOAT3 InitialVelocity = { 0.0f, 3.0f, 0.0f };
+    float DeltaTime = 0.0f;
+    XMFLOAT4 InitialColor = { 1.0f, 0.65f, 0.15f, 1.0f };
+    XMFLOAT3 CameraPosition = { 0.0f, 0.0f, 0.0f };
+    float TotalTime = 0.0f;
+    float MinLifetime = 1.0f;
+    float MaxLifetime = 3.0f;
+    UINT EmitCount = 32;
+    float Padding0 = 0.0f;
+};
+
 class BoxApp : public D3DApp {
 public:
     void buildResources();
@@ -77,6 +93,9 @@ public:
     ~BoxApp();
     BoxApp(HINSTANCE hInstance) : D3DApp(hInstance) { initializeConstants(); };
 private:
+    static constexpr UINT PARTICLE_COUNT = 65536;
+    static constexpr UINT PARTICLE_CS_GROUP_SIZE = 256;
+
     const float SPONZA_SCALE = 0.01f;
     const float EARTH_SCALE = 0.1f;
     const float SPEED_FACTOR = 10.f;
@@ -89,8 +108,14 @@ private:
     void buildBuffers();
     void buildConstantBuffer();
     void buildRootSignature();
+    void buildParticleRootSignature();
+    void buildParticleComputeRootSignature();
     void buildLightingRootSignature();
     void buildPso(const std::wstring& shaderName, ComPtr<ID3D12PipelineState>& pso, bool enableTessellation = false);
+    void buildParticlePso();
+    void buildParticleResources();
+    void buildParticleDescriptors();
+    void dispatchParticlePass(const GameTimer& gt);
     void initializeConstants();
     void loadTextures();
     void buildCbvSrvHeap();
@@ -102,6 +127,11 @@ private:
     UINT getLightingCbvIndex() const;
     UINT getGBufferSrvStartIndex() const;
     UINT getDefaultTextureSrvStartIndex() const;
+    UINT getParticlePoolSrvIndex() const;
+    UINT getParticlePoolUavIndex() const;
+    UINT getDeadListUavIndex() const;
+    UINT getDeadListConsumeUavIndex() const;
+    UINT getSortListUavIndex() const;
 
     void update(const GameTimer& gt) override;
     void draw(const GameTimer& gt) override;
@@ -119,13 +149,19 @@ private:
     UploadBuffer<ObjectConstants>* mObjectCB = nullptr;
     UploadBuffer<PassConstants>* mPassCB = nullptr;
     UploadBuffer<LightingConstants>* mLightingCB = nullptr;
+    UploadBuffer<ParticleSimConstants>* mParticleSimCB = nullptr;
 
     ComPtr<ID3D12RootSignature> mRootSignature;
+    ComPtr<ID3D12RootSignature> mParticleRootSignature;
+    ComPtr<ID3D12RootSignature> mParticleComputeRootSignature;
     ComPtr<ID3D12RootSignature> mLightingRootSignature;
     ComPtr<ID3D12PipelineState> mPSO;
     ComPtr<ID3D12PipelineState> mEarthTessPSO;
     ComPtr<ID3D12PipelineState> mColumnPSO;
     ComPtr<ID3D12PipelineState> mLightingPSO;
+    ComPtr<ID3D12PipelineState> mParticlePSO;
+    ComPtr<ID3D12PipelineState> mParticleEmitPSO;
+    ComPtr<ID3D12PipelineState> mParticleSimulatePSO;
 
     ComPtr<ID3D12DescriptorHeap> mCbvSrvHeap;
     UINT mCbvSrvDescriptorSize = 0;
@@ -136,7 +172,7 @@ private:
     XMFLOAT4X4 mView;
     XMFLOAT4X4 mProj;
 
-    DirectX::XMFLOAT3 mEyePos = { 0.0f, 12.0f, -10.0f };
+    DirectX::XMFLOAT3 mEyePos = { 0.0f, 12.0f, -20.0f };
     DirectX::XMFLOAT3 mLook = { 0.0f, 0.0f, 1.0f };
     DirectX::XMFLOAT3 mRight = { 1.0f, 0.0f, 0.0f };
     DirectX::XMFLOAT3 mUp = { 0.0f, 1.0f, 0.0f };
@@ -164,6 +200,16 @@ private:
     ComPtr<ID3D12Resource> mDefaultNormalTexUpload = nullptr;
     ComPtr<ID3D12Resource> mDefaultDisplacementTexUpload = nullptr;
     std::unique_ptr<RenderingSystem> mRenderingSystem;
+    ComPtr<ID3D12Resource> mParticlePoolBuffer;
+    ComPtr<ID3D12Resource> mParticlePoolUpload;
+    ComPtr<ID3D12Resource> mDeadListBuffer;
+    ComPtr<ID3D12Resource> mDeadListUpload;
+    ComPtr<ID3D12Resource> mDeadListCounterBuffer;
+    ComPtr<ID3D12Resource> mDeadListCounterUpload;
+    ComPtr<ID3D12Resource> mSortListBuffer;
+    ComPtr<ID3D12Resource> mParticleIndexBuffer;
+    ComPtr<ID3D12Resource> mParticleIndexUpload;
+    D3D12_VERTEX_BUFFER_VIEW mParticleIndexBufferView = {};
 
     size_t mBillboardIndex = static_cast<size_t>(-1);
     DirectX::XMFLOAT3 mEarthPosition = { 0.0f, 12.0f, 0.0f };

@@ -14,6 +14,8 @@ cbuffer cbPerObject : register(b0)
 cbuffer cbPass : register(b1)
 {
     float4x4 gInvViewProj;
+    float4x4 gView;
+    float4x4 gProj;
     float3 gEyePosW;
     float gPassPadding;
     float4 gAmbientColor;
