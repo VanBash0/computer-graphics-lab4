@@ -918,6 +918,9 @@ void BoxApp::buildParticleResources() {
         D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&mParticlePoolBuffer)));
     createUpload(particlePoolByteSize, mParticlePoolUpload);
     std::vector<ParticleData> initialParticles(PARTICLE_COUNT);
+    for (auto& p : initialParticles) {
+        p.age = -1.0f;
+    }
     void* mappedPtr = nullptr;
     failCheck(mParticlePoolUpload->Map(0, nullptr, &mappedPtr));
     std::memcpy(mappedPtr, initialParticles.data(), static_cast<size_t>(particlePoolByteSize));

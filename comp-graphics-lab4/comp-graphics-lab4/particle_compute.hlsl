@@ -76,8 +76,15 @@ void SimulateCS(uint3 dtid : SV_DispatchThreadID)
     
     Particle p = g_ParticlePool[i];
     
+    if (p.age < 0.0f)
+    {
+        return;
+    }
+    
     if (p.age >= p.lifetime)
     {
+        p.age = -1.0f;
+        g_ParticlePool[i] = p;
         g_DeadListAppend.Append(i);
         return;
     }

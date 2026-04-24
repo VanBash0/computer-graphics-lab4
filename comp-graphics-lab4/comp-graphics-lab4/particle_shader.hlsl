@@ -47,7 +47,7 @@ GSIn VS(VSIn vin)
     output.position = p.position;
     output.size = p.size;
     output.color = p.color;
-    output.alive = (uint)(1.0f - step(p.lifetime, p.age));
+    output.alive = (p.age >= 0.0f && p.age < p.lifetime) ? 1u : 0u;
     
     return output;
 }
