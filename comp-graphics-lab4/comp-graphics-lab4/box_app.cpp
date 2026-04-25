@@ -24,7 +24,9 @@ namespace {
         float lifetime;
         XMFLOAT4 color;
         float size;
-        XMFLOAT3 padding;
+        UINT shapeId1;
+        UINT shapeId2;
+        float padding;
     };
 
     bool isColumnSubmesh(const Submesh& submesh) {
@@ -429,16 +431,16 @@ void BoxApp::update(const GameTimer& gt) {
     mLightingCB->copyData(0, lightingConstants);
 
     ParticleSimConstants particleSim = {};
-    particleSim.EmitterPosition = XMFLOAT3(0.f, 12.f, -15.f);
+    particleSim.EmitterPosition = XMFLOAT3(0.f, 0.f, 0.f);
     particleSim.InitialVelocity = XMFLOAT3(0.f, 3.f, 0.f);
-    particleSim.InitialSize = .35f;
-    particleSim.InitialColor = XMFLOAT4(1.0f, 0.65f, 0.15f, 1.0f);
+    particleSim.InitialSize = .2f;
+    particleSim.InitialColor = XMFLOAT4(.0f, 0.f, 0.f, 1.f);
     particleSim.DeltaTime = gt.getDeltaTime();
     particleSim.TotalTime = gt.getTotalTime();
     particleSim.CameraPosition = mEyePos;
     particleSim.MinLifetime = 1.f;
     particleSim.MaxLifetime = 3.5f;
-    particleSim.EmitCount = 96;
+    particleSim.EmitCount = 10;
     mParticleSimCB->copyData(0, particleSim);
 }
 

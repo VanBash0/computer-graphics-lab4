@@ -6,7 +6,9 @@ struct Particle
     float lifetime;
     float4 color;
     float size;
-    float3 padding;
+    uint shapeId1;
+    uint shapeId2;
+    float padding;
 };
 
 cbuffer ParticleSimCB : register(b0)
@@ -27,7 +29,6 @@ cbuffer ParticleSimCB : register(b0)
 RWStructuredBuffer<Particle> g_ParticlePool : register(u0);
 AppendStructuredBuffer<uint> g_DeadListAppend : register(u1);
 ConsumeStructuredBuffer<uint> g_DeadListConsume : register(u2);
-RWStructuredBuffer<float2> g_SortList : register(u3);
 
 float rand01(uint seed)
 {
@@ -54,13 +55,17 @@ void EmitCS(uint3 dtid : SV_DispatchThreadID)
     
     Particle p;
     p.position = gEmitterPosition;
-    p.velocity = gInitialVelocity + float3(cos(angle) * speed, rand01(spawnId * 31u + 7u) * 2.0f, sin(angle) * speed);
+    float spreadFactor = 0.33f;
+    p.velocity = gInitialVelocity + float3(cos(angle) * speed * spreadFactor, rand01(spawnId * 31u + 7u) * 2.0f, sin(angle) * speed * spreadFactor);
     p.age = 0.0f;
     p.lifetime = lerp(gMinLifetime, gMaxLifetime, rand01(spawnId * 13u + 11u));
     p.color = gInitialColor;
     p.size = gInitialSize;
-    p.padding = 0.0f.xxx;
+    p.padding = 0.0f.xx;
     
+    uint shapeCount = 3;
+    p.shapeId1 = min((uint)(rand01(spawnId * 97u + 19u) * shapeCount), shapeCount - 1);
+    p.shapeId2 = min((uint)(rand01(spawnId * 91u + 13u) * shapeCount), shapeCount - 1);
     
     g_ParticlePool[index] = p;
 }
@@ -93,9 +98,4 @@ void SimulateCS(uint3 dtid : SV_DispatchThreadID)
     p.age += gDeltaTime;
     
     g_ParticlePool[i] = p;
-    
-    float3 toCam = p.position - gCameraPosition;
-    float distSq = dot(toCam, toCam);
-    
-    g_SortList[i] = float2((float)i, distSq);
 }

@@ -82,7 +82,7 @@ struct ParticleSimConstants {
     float TotalTime = 0.0f;
     float MinLifetime = 1.0f;
     float MaxLifetime = 3.0f;
-    UINT EmitCount = 32;
+    UINT EmitCount = 10;
     float Padding0 = 0.0f;
 };
 
