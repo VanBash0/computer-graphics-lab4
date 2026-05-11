@@ -111,6 +111,7 @@ void BoxApp::buildResources() {
     buildParticleResources();
     createDefaultTextures();
     buildCbvSrvHeap();
+    buildShadowMapResources();
     buildParticleDescriptors();
     bindMaterialsToTextures();
     buildPso(L"main_shader.hlsl", mPSO);
@@ -1067,7 +1068,7 @@ void BoxApp::loadTextures() {
 void BoxApp::buildCbvSrvHeap() {
     UINT numTextures = static_cast<UINT>(mTextures.size());
     const UINT objectCbvCount = static_cast<UINT>(mSubmeshes.size());
-    UINT numDescriptors = objectCbvCount + 3 + GBuffer::mTexturesNum + 3 + numTextures + 5;
+    UINT numDescriptors = objectCbvCount + 3 + GBuffer::mTexturesNum + 3 + numTextures + 1 + 5;
 
     D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
     heapDesc.NumDescriptors = numDescriptors;
@@ -1142,6 +1143,64 @@ void BoxApp::buildCbvSrvHeap() {
         texture->srvHeapIndex = i;
         ++i;
     }
+
+    mShadowMapSrvIndex = i;
+}
+
+void BoxApp::buildShadowMapResources() {
+    D3D12_CLEAR_VALUE clearValue = {};
+    clearValue.Format = DXGI_FORMAT_D32_FLOAT;
+    clearValue.DepthStencil.Depth = 1.0f;
+    clearValue.DepthStencil.Stencil = 0;
+
+    auto heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+    auto resDesc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32_TYPELESS, SHADOW_MAP_SIZE,
+                                                SHADOW_MAP_SIZE, SHADOW_CASCADE_COUNT, 1,
+                                                1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
+
+    failCheck(md3dDevice->CreateCommittedResource(&heapProperties, D3D12_HEAP_FLAG_NONE, &resDesc,
+                                                  D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+                                                  &clearValue, IID_PPV_ARGS(&mShadowMap)));
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Format = DXGI_FORMAT_R32_FLOAT;
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+    srvDesc.Texture2DArray.MostDetailedMip = 0;
+    srvDesc.Texture2DArray.MipLevels = 1;
+    srvDesc.Texture2DArray.FirstArraySlice = 0;
+    srvDesc.Texture2DArray.ArraySize = SHADOW_CASCADE_COUNT;
+    srvDesc.Texture2DArray.PlaneSlice = 0;
+    srvDesc.Texture2DArray.ResourceMinLODClamp = 0.0f;
+
+    CD3DX12_CPU_DESCRIPTOR_HANDLE shadowSrvHandle(mCbvSrvHeap->GetCPUDescriptorHandleForHeapStart(),
+                                                  mShadowMapSrvIndex, mCbvSrvDescriptorSize);
+    md3dDevice->CreateShaderResourceView(mShadowMap.Get(), &srvDesc, shadowSrvHandle);
+
+    D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc = {};
+    dsvHeapDesc.NumDescriptors = SHADOW_CASCADE_COUNT;
+    dsvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+    dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+    failCheck(md3dDevice->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&mShadowDsvHeap)));
+
+    UINT dsvDescriptorSize = md3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+    CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle(mShadowDsvHeap->GetCPUDescriptorHandleForHeapStart());
+
+    for (int i = 0; i < SHADOW_CASCADE_COUNT; ++i) {
+        D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
+        dsvDesc.Format = DXGI_FORMAT_D32_FLOAT;
+        dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+        dsvDesc.Texture2DArray.MipSlice = 0;
+        dsvDesc.Texture2DArray.FirstArraySlice = i;
+        dsvDesc.Texture2DArray.ArraySize = 1;
+
+        md3dDevice->CreateDepthStencilView(mShadowMap.Get(), &dsvDesc, dsvHandle);
+        dsvHandle.Offset(1, dsvDescriptorSize);
+    }
+
+    mShadowViewport = D3D12_VIEWPORT{0.0f, 0.0f, static_cast<float>(SHADOW_MAP_SIZE),
+                                     static_cast<float>(SHADOW_MAP_SIZE), 0.0f, 1.0f};
+    mShadowScissorRect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
 }
 
 void BoxApp::bindMaterialsToTextures() {
@@ -1253,7 +1312,7 @@ UINT BoxApp::getDefaultTextureSrvStartIndex() const {
 }
 
 UINT BoxApp::getParticlePoolSrvIndex() const {
-    return getDefaultTextureSrvStartIndex() + 3 + static_cast<UINT>(mTextures.size());
+    return getDefaultTextureSrvStartIndex() + 3 + static_cast<UINT>(mTextures.size()) + 1;
 }
 
 UINT BoxApp::getParticlePoolUavIndex() const {

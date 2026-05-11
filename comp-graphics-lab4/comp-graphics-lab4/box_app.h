@@ -100,6 +100,8 @@ public:
 private:
     static constexpr UINT PARTICLE_COUNT = 65536;
     static constexpr UINT PARTICLE_CS_GROUP_SIZE = 256;
+    static constexpr UINT SHADOW_CASCADE_COUNT = 4;
+    static constexpr UINT SHADOW_MAP_SIZE = 2048;
 
     const float SPONZA_SCALE = 0.01f;
     const float EARTH_SCALE = 0.1f;
@@ -122,6 +124,7 @@ private:
     void buildParticlePso();
     void buildParticleResources();
     void buildParticleDescriptors();
+    void buildShadowMapResources();
     void dispatchParticlePass(const GameTimer& gt);
     void initializeConstants();
     void loadTextures();
@@ -227,6 +230,11 @@ private:
 
     std::vector<CascadeFrustum> mCascades;
     std::vector<XMFLOAT4X4> mCascadeLightViewProjs;
+    ComPtr<ID3D12Resource> mShadowMap;
+    ComPtr<ID3D12DescriptorHeap> mShadowDsvHeap;
+    UINT mShadowMapSrvIndex = 0;
+    D3D12_VIEWPORT mShadowViewport = {};
+    D3D12_RECT mShadowScissorRect = {};
 
     bool mEnableColumnVertexAnimation = false;
     bool mEnableColumnTextureAnimation = false;
