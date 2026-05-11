@@ -225,7 +225,8 @@ private:
     DirectX::XMFLOAT3 mEarthBillboardPosition = { 0.0f, 24.0f, 0.0f };
     std::vector<size_t> mEarthSubmeshIndices;
 
-    std::vector<CascadeFrustum> mCascadeFrustums;
+    std::vector<CascadeFrustum> mCascades;
+    std::vector<XMFLOAT4X4> mCascadeLightViewProjs;
 
     bool mEnableColumnVertexAnimation = false;
     bool mEnableColumnTextureAnimation = false;

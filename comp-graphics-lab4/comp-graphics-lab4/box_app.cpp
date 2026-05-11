@@ -418,6 +418,25 @@ void BoxApp::update(const GameTimer& gt) {
     XMMATRIX viewProj = view * proj;
     XMMATRIX invViewProj = XMMatrixInverse(nullptr, viewProj);
 
+    buildCascades(viewProj);
+    mCascadeLightViewProjs.clear();
+
+    LightData dirLight;
+    for (const auto& light : mLights) {
+        if (light.Type == static_cast<UINT>(LightType::Directional)) {
+            dirLight = light;
+            break;
+        }
+    }
+
+    mCascadeLightViewProjs.reserve(mCascades.size());
+    for (const auto& cascade : mCascades) {
+        XMMATRIX lightViewProj = getLightViewProj(cascade, dirLight);
+        XMFLOAT4X4 lightViewProjFloat4x4;
+        XMStoreFloat4x4(&lightViewProjFloat4x4, XMMatrixTranspose(lightViewProj));
+        mCascadeLightViewProjs.push_back(lightViewProjFloat4x4);
+    }
+
     PassConstants passConstants = {};
     XMStoreFloat4x4(&passConstants.InvViewProj, XMMatrixTranspose(invViewProj));
     XMStoreFloat4x4(&passConstants.View, XMMatrixTranspose(view));
@@ -1299,7 +1318,7 @@ void BoxApp::createDefaultTextures() {
 }
 
 void BoxApp::buildCascades(const XMMATRIX& viewProj) {
-    mCascadeFrustums.clear();
+    mCascades.clear();
     XMMATRIX invViewProj = XMMatrixInverse(nullptr, viewProj);
 
     XMVECTOR frustumCorners[8] = {
@@ -1318,7 +1337,8 @@ void BoxApp::buildCascades(const XMMATRIX& viewProj) {
         worldCorners[i] = XMVector4Transform(frustumCorners[i], invViewProj);
         worldCorners[i] /= XMVectorGetW(worldCorners[i]);
     }
-
+    
+    mCascades.reserve(_countof(SPLIT_DISTANCES));
     for (int i = 0; i < _countof(SPLIT_DISTANCES) - 1; ++i) {
         CascadeFrustum cascade;
         float n = SPLIT_DISTANCES[i];
@@ -1333,7 +1353,7 @@ void BoxApp::buildCascades(const XMMATRIX& viewProj) {
             center += nearPoint + farPoint;
         }
         XMStoreFloat3(&cascade.Center, center / 8.0f);
-        mCascadeFrustums.push_back(cascade);
+        mCascades.push_back(cascade);
     }
 }
 
