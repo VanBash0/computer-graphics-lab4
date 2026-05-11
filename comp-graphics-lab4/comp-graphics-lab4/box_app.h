@@ -130,6 +130,7 @@ private:
     void buildOctree();
     void buildCascades(const XMMATRIX& viewProj);
     std::vector<size_t> collectVisibleSubmeshes() const;
+    XMMATRIX getLightViewProj(const CascadeFrustum& cascade, const LightData& light) const;
 
     UINT getPassCbvIndex() const;
     UINT getLightingCbvIndex() const;

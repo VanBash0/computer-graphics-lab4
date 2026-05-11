@@ -1,4 +1,6 @@
-﻿#include "box_app.h"
+﻿#define NOMINMAX
+
+#include "box_app.h"
 #include "fail_checker.h"
 #include "model_loader.h"
 #include "DDSTextureLoader.h"
@@ -15,6 +17,7 @@
 #include <cstring>
 #include <filesystem>
 #include <unordered_map>
+#include <limits>
 
 namespace {
     struct ParticleData {
@@ -1332,4 +1335,37 @@ void BoxApp::buildCascades(const XMMATRIX& viewProj) {
         XMStoreFloat3(&cascade.Center, center / 8.0f);
         mCascadeFrustums.push_back(cascade);
     }
+}
+
+XMMATRIX BoxApp::getLightViewProj(const CascadeFrustum& cascade, const LightData& light) const {
+    XMFLOAT3 center = cascade.Center;
+    XMMATRIX lightView = XMMatrixLookAtLH(
+        XMLoadFloat3(&center),
+        XMLoadFloat3(&center) + XMLoadFloat3(&light.Direction),
+        XMVectorSet(0.0f, 0.0f, 1.0f, 1.0f)
+    );
+
+    float minX = std::numeric_limits<float>::max();
+    float maxX = std::numeric_limits<float>::lowest();
+    float minY = std::numeric_limits<float>::max();
+    float maxY = std::numeric_limits<float>::lowest();
+    float minZ = std::numeric_limits<float>::max();
+    float maxZ = std::numeric_limits<float>::lowest();
+
+    for (const auto& vertex : cascade.Vertices) {
+        XMVECTOR transformed = XMVector3Transform(XMLoadFloat3(&vertex), lightView);
+        minX = std::min(minX, XMVectorGetX(transformed));
+        maxX = std::max(maxX, XMVectorGetX(transformed));
+        minY = std::min(minY, XMVectorGetY(transformed));
+        maxY = std::max(maxY, XMVectorGetY(transformed));
+        minZ = std::min(minZ, XMVectorGetZ(transformed));
+        maxZ = std::max(maxZ, XMVectorGetZ(transformed));
+    }
+
+    constexpr float zMult = 10.0f;
+    minZ = (minZ < 0.0f) ? minZ * zMult : minZ / zMult;
+    maxZ = (maxZ < 0.0f) ? maxZ / zMult : maxZ * zMult;
+
+    XMMATRIX lightProj = XMMatrixOrthographicOffCenterLH(minX, maxX, minY, maxY, minZ, maxZ);
+    return lightView * lightProj;
 }
