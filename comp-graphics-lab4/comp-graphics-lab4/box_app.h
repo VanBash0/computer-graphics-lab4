@@ -86,6 +86,11 @@ struct ParticleSimConstants {
     float Padding0 = 0.0f;
 };
 
+struct CascadeFrustum {
+    XMFLOAT3 Vertices[8];
+    XMFLOAT3 Center;
+};
+
 class BoxApp : public D3DApp {
 public:
     void buildResources();
@@ -103,6 +108,8 @@ private:
     const float EARTH_BILLBOARD_SWITCH_DISTANCE = 60.0f;
     const float BILLBOARD_SIZE = 10.0f;
     const Vector3 TEXTURE_SCALE = Vector3(1.f, 1.f, 1.f);
+    const float SPLIT_DISTANCES[4] = { 0.05f, 0.15f, 0.3f, 1.0f };
+
     void setObjectSize(Vertex& vertex, float scale);
 
     void buildBuffers();
@@ -121,6 +128,7 @@ private:
     void buildCbvSrvHeap();
     void bindMaterialsToTextures();
     void buildOctree();
+    void buildCascades(const XMMATRIX& viewProj);
     std::vector<size_t> collectVisibleSubmeshes() const;
 
     UINT getPassCbvIndex() const;
@@ -216,8 +224,10 @@ private:
     DirectX::XMFLOAT3 mEarthBillboardPosition = { 0.0f, 24.0f, 0.0f };
     std::vector<size_t> mEarthSubmeshIndices;
 
-    bool mEnableColumnVertexAnimation = true;
-    bool mEnableColumnTextureAnimation = true;
+    std::vector<CascadeFrustum> mCascadeFrustums;
+
+    bool mEnableColumnVertexAnimation = false;
+    bool mEnableColumnTextureAnimation = false;
     bool mEnableFrustumCulling = true;
 };
 

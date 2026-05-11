@@ -1294,3 +1294,42 @@ void BoxApp::createDefaultTextures() {
     createSolidTexture(0xffff8080, mDefaultNormalTex, mDefaultNormalTexUpload);
     createSolidTexture(0xff000000, mDefaultDisplacementTex, mDefaultDisplacementTexUpload);
 }
+
+void BoxApp::buildCascades(const XMMATRIX& viewProj) {
+    mCascadeFrustums.clear();
+    XMMATRIX invViewProj = XMMatrixInverse(nullptr, viewProj);
+
+    XMVECTOR frustumCorners[8] = {
+        XMVectorSet(-1.0f, 1.0f, 0.0f, 1.0f),
+        XMVectorSet(1.0f, 1.0f, 0.0f, 1.0f),
+        XMVectorSet(1.0f, -1.0f, 0.0f, 1.0f),
+        XMVectorSet(-1.0f, -1.0f, 0.0f, 1.0f),
+        XMVectorSet(-1.0f, 1.0f, 1.0f, 1.0f),
+        XMVectorSet(1.0f, 1.0f, 1.0f, 1.0f),
+        XMVectorSet(1.0f, -1.0f, 1.0f, 1.0f),
+        XMVectorSet(-1.0f, -1.0f, 1.0f, 1.0f)
+    };
+
+    XMVECTOR worldCorners[8];
+    for (int i = 0; i < 8; ++i) {
+        worldCorners[i] = XMVector4Transform(frustumCorners[i], invViewProj);
+        worldCorners[i] /= XMVectorGetW(worldCorners[i]);
+    }
+
+    for (int i = 0; i < _countof(SPLIT_DISTANCES) - 1; ++i) {
+        CascadeFrustum cascade;
+        float n = SPLIT_DISTANCES[i];
+        float f = SPLIT_DISTANCES[i + 1];
+
+        XMVECTOR center = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
+        for (int j = 0; j < 4; ++j) {
+            XMVECTOR nearPoint = worldCorners[j] + n * (worldCorners[j + 4] - worldCorners[j]);
+            XMVECTOR farPoint = worldCorners[j] + f * (worldCorners[j + 4] - worldCorners[j]);
+            XMStoreFloat3(&cascade.Vertices[j], nearPoint);
+            XMStoreFloat3(&cascade.Vertices[j + 4], farPoint);
+            center += nearPoint + farPoint;
+        }
+        XMStoreFloat3(&cascade.Center, center / 8.0f);
+        mCascadeFrustums.push_back(cascade);
+    }
+}
