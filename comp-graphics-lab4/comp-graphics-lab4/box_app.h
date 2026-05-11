@@ -32,9 +32,15 @@ struct PassConstants {
     XMFLOAT4X4 InvViewProj;
     XMFLOAT4X4 View;
     XMFLOAT4X4 Proj;
+    XMFLOAT4X4 ShadowViewProj[4];
+    XMFLOAT4 ShadowCascadeSplits;
     XMFLOAT3 EyePosW;
     float Padding = 0.0f;
     XMFLOAT4 AmbientColor;
+};
+
+struct ShadowPassConstants {
+    XMFLOAT4X4 LightViewProj;
 };
 
 enum class LightType : UINT {
@@ -121,6 +127,7 @@ private:
     void buildParticleComputeRootSignature();
     void buildLightingRootSignature();
     void buildPso(const std::wstring& shaderName, ComPtr<ID3D12PipelineState>& pso, bool enableTessellation = false);
+    void buildShadowPso();
     void buildParticlePso();
     void buildParticleResources();
     void buildParticleDescriptors();
@@ -137,6 +144,7 @@ private:
 
     UINT getPassCbvIndex() const;
     UINT getLightingCbvIndex() const;
+    UINT getShadowPassCbvIndex(UINT cascadeIndex) const;
     UINT getGBufferSrvStartIndex() const;
     UINT getDefaultTextureSrvStartIndex() const;
     UINT getParticlePoolSrvIndex() const;
@@ -161,6 +169,7 @@ private:
     UploadBuffer<ObjectConstants>* mObjectCB = nullptr;
     UploadBuffer<PassConstants>* mPassCB = nullptr;
     UploadBuffer<LightingConstants>* mLightingCB = nullptr;
+    UploadBuffer<ShadowPassConstants>* mShadowPassCB = nullptr;
     UploadBuffer<ParticleSimConstants>* mParticleSimCB = nullptr;
 
     ComPtr<ID3D12RootSignature> mRootSignature;
@@ -171,6 +180,7 @@ private:
     ComPtr<ID3D12PipelineState> mEarthTessPSO;
     ComPtr<ID3D12PipelineState> mColumnPSO;
     ComPtr<ID3D12PipelineState> mLightingPSO;
+    ComPtr<ID3D12PipelineState> mShadowPSO;
     ComPtr<ID3D12PipelineState> mParticlePSO;
     ComPtr<ID3D12PipelineState> mParticleEmitPSO;
     ComPtr<ID3D12PipelineState> mParticleSimulatePSO;

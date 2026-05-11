@@ -118,6 +118,7 @@ void BoxApp::buildResources() {
     buildPso(L"main_shader.hlsl", mEarthTessPSO, true);
     buildPso(L"column_shader.hlsl", mColumnPSO);
     buildPso(L"lighting_shader.hlsl", mLightingPSO);
+    buildShadowPso();
     buildParticlePso();
     failCheck(mCommandList->Close());
 
@@ -270,6 +271,7 @@ void BoxApp::buildConstantBuffer()
     mObjectCB = new UploadBuffer<ObjectConstants>(md3dDevice.Get(), static_cast<UINT>(mSubmeshes.size()), true);
     mPassCB = new UploadBuffer<PassConstants>(md3dDevice.Get(), 1, true);
     mLightingCB = new UploadBuffer<LightingConstants>(md3dDevice.Get(), 1, true);
+    mShadowPassCB = new UploadBuffer<ShadowPassConstants>(md3dDevice.Get(), SHADOW_CASCADE_COUNT, true);
     mParticleSimCB = new UploadBuffer<ParticleSimConstants>(md3dDevice.Get(), 1, true);
 }
 
@@ -431,17 +433,32 @@ void BoxApp::update(const GameTimer& gt) {
     }
 
     mCascadeLightViewProjs.reserve(mCascades.size());
-    for (const auto& cascade : mCascades) {
+    for (size_t cascadeIndex = 0; cascadeIndex < mCascades.size(); ++cascadeIndex) {
+        const auto& cascade = mCascades[cascadeIndex];
         XMMATRIX lightViewProj = getLightViewProj(cascade, dirLight);
         XMFLOAT4X4 lightViewProjFloat4x4;
         XMStoreFloat4x4(&lightViewProjFloat4x4, XMMatrixTranspose(lightViewProj));
         mCascadeLightViewProjs.push_back(lightViewProjFloat4x4);
+
+        if (cascadeIndex < SHADOW_CASCADE_COUNT) {
+            ShadowPassConstants shadowPass = {};
+            shadowPass.LightViewProj = lightViewProjFloat4x4;
+            mShadowPassCB->copyData(static_cast<int>(cascadeIndex), shadowPass);
+        }
     }
 
     PassConstants passConstants = {};
     XMStoreFloat4x4(&passConstants.InvViewProj, XMMatrixTranspose(invViewProj));
     XMStoreFloat4x4(&passConstants.View, XMMatrixTranspose(view));
     XMStoreFloat4x4(&passConstants.Proj, XMMatrixTranspose(proj));
+    for (size_t i = 0; i < mCascadeLightViewProjs.size() && i < SHADOW_CASCADE_COUNT; ++i) {
+        passConstants.ShadowViewProj[i] = mCascadeLightViewProjs[i];
+    }
+    passConstants.ShadowCascadeSplits = XMFLOAT4(
+        SPLIT_DISTANCES[0],
+        SPLIT_DISTANCES[1],
+        SPLIT_DISTANCES[2],
+        SPLIT_DISTANCES[3]);
     passConstants.EyePosW = mEyePos;
     passConstants.AmbientColor = XMFLOAT4(0.08f, 0.08f, 0.1f, 1.0f);
     mPassCB->copyData(0, passConstants);
@@ -477,6 +494,9 @@ BoxApp::~BoxApp()
 
     delete mLightingCB;
     mLightingCB = nullptr;
+
+    delete mShadowPassCB;
+    mShadowPassCB = nullptr;
 
     delete mParticleSimCB;
     mParticleSimCB = nullptr;
@@ -882,6 +902,30 @@ void BoxApp::buildPso(const std::wstring& shaderName, ComPtr<ID3D12PipelineState
     failCheck(md3dDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pso)));
 }
 
+void BoxApp::buildShadowPso() {
+    ComPtr<ID3DBlob> vsByteCode = D3DUtil::compileShader(L"shadow_shader.hlsl", nullptr, "ShadowVS", "vs_5_0");
+
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+    psoDesc.pRootSignature = mRootSignature.Get();
+    psoDesc.VS = { reinterpret_cast<BYTE*>(vsByteCode->GetBufferPointer()), vsByteCode->GetBufferSize() };
+    psoDesc.PS = { nullptr, 0 };
+    psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+    psoDesc.SampleMask = UINT_MAX;
+    psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+    psoDesc.RasterizerState.DepthBias = 1000;
+    psoDesc.RasterizerState.SlopeScaledDepthBias = 1.0f;
+    psoDesc.RasterizerState.DepthBiasClamp = 0.0f;
+    psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+    psoDesc.InputLayout = { mInputLayout.data(), (UINT)mInputLayout.size() };
+    psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    psoDesc.NumRenderTargets = 0;
+    psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+    psoDesc.SampleDesc.Count = 1;
+    psoDesc.SampleDesc.Quality = 0;
+
+    failCheck(md3dDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mShadowPSO)));
+}
+
 void BoxApp::buildParticlePso() {
     ComPtr<ID3DBlob> vsByteCode = D3DUtil::compileShader(L"particle_shader.hlsl", nullptr, "VS", "vs_5_0");
     ComPtr<ID3DBlob> gsByteCode = D3DUtil::compileShader(L"particle_shader.hlsl", nullptr, "GS", "gs_5_0");
@@ -1024,7 +1068,7 @@ void BoxApp::dispatchParticlePass(const GameTimer&) {
     CD3DX12_GPU_DESCRIPTOR_HANDLE deadListUavHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart(), getDeadListUavIndex(), mCbvSrvDescriptorSize);
     CD3DX12_GPU_DESCRIPTOR_HANDLE deadListConsumeUavHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart(), getDeadListConsumeUavIndex(), mCbvSrvDescriptorSize);
     CD3DX12_GPU_DESCRIPTOR_HANDLE sortListUavHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart(), getSortListUavIndex(), mCbvSrvDescriptorSize);
-    CD3DX12_GPU_DESCRIPTOR_HANDLE simCbvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart(), getLightingCbvIndex() + 1, mCbvSrvDescriptorSize);
+    CD3DX12_GPU_DESCRIPTOR_HANDLE simCbvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart(), getShadowPassCbvIndex(SHADOW_CASCADE_COUNT - 1) + 1, mCbvSrvDescriptorSize);
     mCommandList->SetComputeRootDescriptorTable(0, particlePoolUavHandle);
     mCommandList->SetComputeRootDescriptorTable(1, deadListUavHandle);
     mCommandList->SetComputeRootDescriptorTable(2, deadListConsumeUavHandle);
@@ -1068,7 +1112,7 @@ void BoxApp::loadTextures() {
 void BoxApp::buildCbvSrvHeap() {
     UINT numTextures = static_cast<UINT>(mTextures.size());
     const UINT objectCbvCount = static_cast<UINT>(mSubmeshes.size());
-    UINT numDescriptors = objectCbvCount + 3 + GBuffer::mTexturesNum + 3 + numTextures + 1 + 5;
+    UINT numDescriptors = objectCbvCount + 3 + SHADOW_CASCADE_COUNT + GBuffer::mTexturesNum + 3 + numTextures + 1 + 5;
 
     D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
     heapDesc.NumDescriptors = numDescriptors;
@@ -1101,6 +1145,14 @@ void BoxApp::buildCbvSrvHeap() {
     cbvDesc.SizeInBytes = D3DUtil::calcConstantBufferByteSize(sizeof(LightingConstants));
     md3dDevice->CreateConstantBufferView(&cbvDesc, handle);
     handle.Offset(1, mCbvSrvDescriptorSize);
+
+    cbvDesc.BufferLocation = mShadowPassCB->getResource()->GetGPUVirtualAddress();
+    cbvDesc.SizeInBytes = D3DUtil::calcConstantBufferByteSize(sizeof(ShadowPassConstants));
+    for (UINT cascadeIndex = 0; cascadeIndex < SHADOW_CASCADE_COUNT; ++cascadeIndex) {
+        md3dDevice->CreateConstantBufferView(&cbvDesc, handle);
+        handle.Offset(1, mCbvSrvDescriptorSize);
+        cbvDesc.BufferLocation += cbvDesc.SizeInBytes;
+    }
 
     cbvDesc.BufferLocation = mParticleSimCB->getResource()->GetGPUVirtualAddress();
     cbvDesc.SizeInBytes = D3DUtil::calcConstantBufferByteSize(sizeof(ParticleSimConstants));
@@ -1303,8 +1355,12 @@ UINT BoxApp::getLightingCbvIndex() const {
     return getPassCbvIndex() + 1;
 }
 
+UINT BoxApp::getShadowPassCbvIndex(UINT cascadeIndex) const {
+    return getLightingCbvIndex() + 1 + cascadeIndex;
+}
+
 UINT BoxApp::getGBufferSrvStartIndex() const {
-    return getLightingCbvIndex() + 2;
+    return getShadowPassCbvIndex(SHADOW_CASCADE_COUNT - 1) + 2;
 }
 
 UINT BoxApp::getDefaultTextureSrvStartIndex() const {

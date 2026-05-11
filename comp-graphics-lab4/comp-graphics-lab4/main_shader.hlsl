@@ -16,6 +16,8 @@ cbuffer cbPass : register(b1)
     float4x4 gInvViewProj;
     float4x4 gView;
     float4x4 gProj;
+    float4x4 gShadowViewProj[4];
+    float4 gShadowCascadeSplits;
     float3 gEyePosW;
     float gPassPadding;
     float4 gAmbientColor;
