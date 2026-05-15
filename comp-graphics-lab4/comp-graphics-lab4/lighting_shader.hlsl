@@ -116,39 +116,57 @@ uint chooseCascade(float viewSpaceDepth)
     return 3;
 }
 
-float sampleShadowMap(float3 worldPos, float3 normalW, float3 toLight)
+float calcShadow(float3 worldPos)
 {
-    float4 viewPos = mul(float4(worldPos, 1.0f), gView);
-    float viewDepth = abs(viewPos.z);
-    uint cascadeIndex = chooseCascade(viewDepth);
+    float depth = distance(worldPos, gEyePosW);
+    uint cascadeIndex = 0;
+    if (depth > gShadowCascadeSplits.x)
+        cascadeIndex = 1;
+    if (depth > gShadowCascadeSplits.y)
+        cascadeIndex = 2;
+    if (depth > gShadowCascadeSplits.z)
+        cascadeIndex = 3;
+        
+    float4 shadowPos = mul(float4(worldPos, 1.0f), gShadowViewProj[cascadeIndex]);
+    shadowPos.xyz /= shadowPos.w;
+    
+    float2 shadowTexC = shadowPos.xy * 0.5f + 0.5f;
+    shadowTexC.y = 1.0f - shadowTexC.y;
 
-    float4 lightClip = mul(float4(worldPos, 1.0f), gShadowViewProj[cascadeIndex]);
-    float3 shadowCoord = lightClip.xyz / max(lightClip.w, 0.0001f);
-    float2 uv = shadowCoord.xy * float2(0.5f, -0.5f) + 0.5f;
-    if (uv.x <= 0.0f || uv.x >= 1.0f || uv.y <= 0.0f || uv.y >= 1.0f || shadowCoord.z <= 0.0f || shadowCoord.z >= 1.0f)
-    {
+    float currentDepth = shadowPos.z;
+    
+    if (currentDepth > 1.0f)
         return 1.0f;
+        
+    float shadow = 0.0f;
+    float width, height, elements;
+    gShadowMap.GetDimensions(width, height, elements);
+    float2 texelSize = 1.0f / float2(width, height);
+
+    currentDepth -= 0.001f;
+    [unroll]
+    for (int x = -1; x <= 1; ++x)
+    {
+        [unroll]
+        for (int y = -1; y <= 1; ++y)
+        {
+            float2 offset = float2(x, y) * texelSize;
+            shadow += gShadowMap.SampleCmpLevelZero(gShadowSampler,
+                        float3(shadowTexC + offset, (float) cascadeIndex), currentDepth).r;
+        }
     }
 
-    float ndotl = saturate(dot(normalW, toLight));
-    float bias = max(0.0005f, 0.0025f * (1.0f - ndotl));
-    float depth = shadowCoord.z - bias;
-
-    return gShadowMap.SampleCmpLevelZero(gShadowSampler, float3(uv, cascadeIndex), depth);
+    return shadow / 9.0f;
 }
 
 float3 evaluateDirectionalLight(LightData light, float3 worldPos, float3 normalW)
 {
-    float3 lightDirection = normalize(light.Direction);
-    float3 toLight = -lightDirection;
-    float ndotl = saturate(dot(normalW, toLight));
-    if (ndotl <= 0.0f)
-    {
-        return 0.0f;
-    }
+    float3 lightVec = normalize(-light.Direction);
+    float ndotl = max(dot(lightVec, normalW), 0.0f);
+    
+    float shadowFactor = calcShadow(worldPos);
 
-    float shadow = sampleShadowMap(worldPos, normalW, toLight);
-    return light.Color * light.Intensity * ndotl * shadow;
+    return light.Color * light.Intensity * ndotl * shadowFactor;
 }
 
 float3 evaluateSpotLight(LightData light, float3 worldPos, float3 normalW)

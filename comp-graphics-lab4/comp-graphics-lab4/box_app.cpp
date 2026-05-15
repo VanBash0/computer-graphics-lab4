@@ -141,7 +141,7 @@ void BoxApp::buildBuffers() {
     MeshData earthMesh = earthLoader.loadModel("Earth.fbx");
     rotateMeshX(earthMesh, XM_PI);
     transformMesh(earthMesh, EARTH_SCALE, XMFLOAT3(0.f, 0.f, 0.f));
-    appendMesh(mesh, earthMesh, 1.f);
+    //appendMesh(mesh, earthMesh, 1.f);
 
     MeshData billboardMesh;
     billboardMesh.vertices.resize(4);
