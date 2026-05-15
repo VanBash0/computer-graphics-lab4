@@ -141,7 +141,7 @@ void BoxApp::buildBuffers() {
     MeshData earthMesh = earthLoader.loadModel("Earth.fbx");
     rotateMeshX(earthMesh, XM_PI);
     transformMesh(earthMesh, EARTH_SCALE, XMFLOAT3(0.f, 0.f, 0.f));
-    appendMesh(mesh, earthMesh, 10.f);
+    appendMesh(mesh, earthMesh, 1.f);
 
     MeshData billboardMesh;
     billboardMesh.vertices.resize(4);
@@ -454,11 +454,13 @@ void BoxApp::update(const GameTimer& gt) {
     for (size_t i = 0; i < mCascadeLightViewProjs.size() && i < SHADOW_CASCADE_COUNT; ++i) {
         passConstants.ShadowViewProj[i] = mCascadeLightViewProjs[i];
     }
+
     passConstants.ShadowCascadeSplits = XMFLOAT4(
-        SPLIT_DISTANCES[0],
-        SPLIT_DISTANCES[1],
-        SPLIT_DISTANCES[2],
-        SPLIT_DISTANCES[3]);
+        NEAR_Z + SPLIT_DISTANCES[1] * (FAR_Z - NEAR_Z),
+        NEAR_Z + SPLIT_DISTANCES[2] * (FAR_Z - NEAR_Z),
+        NEAR_Z + SPLIT_DISTANCES[3] * (FAR_Z - NEAR_Z),
+        NEAR_Z + SPLIT_DISTANCES[4] * (FAR_Z - NEAR_Z)
+    );
     passConstants.EyePosW = mEyePos;
     passConstants.AmbientColor = XMFLOAT4(0.08f, 0.08f, 0.1f, 1.0f);
     mPassCB->copyData(0, passConstants);
@@ -534,7 +536,7 @@ void BoxApp::initializeConstants() {
     mLights.clear();
     mSwingingSpotLights.clear();
 
-    LightData redPointLight;
+    /*LightData redPointLight;
     redPointLight.Type = static_cast<UINT>(LightType::Point);
     redPointLight.Position = XMFLOAT3(-1.6f, 2.8f, -1.2f);
     redPointLight.Color = XMFLOAT3(1.0f, 0.0f, 0.0f);
@@ -550,13 +552,13 @@ void BoxApp::initializeConstants() {
     bluePointLight.Intensity = 15.0f;
     bluePointLight.Range = 10.0f;
     bluePointLight.Attenuation = XMFLOAT3(1.0f, 0.09f, 0.032f);
-    mLights.push_back(bluePointLight);
+    mLights.push_back(bluePointLight);*/
 
     LightData directionalFill;
     directionalFill.Type = static_cast<UINT>(LightType::Directional);
-    directionalFill.Direction = XMFLOAT3(-0.35f, -1.0f, -0.2f);
-    directionalFill.Color = XMFLOAT3(0.8f, 0.85f, 1.0f);
-    directionalFill.Intensity = 0.25f;
+    directionalFill.Direction = XMFLOAT3(0.577f, -1.0f, 0.577f);
+    directionalFill.Color = XMFLOAT3(1.0f, 0.9f, 0.7f);
+    directionalFill.Intensity = 1.25f;
     mLights.push_back(directionalFill);
 }
 
@@ -578,6 +580,52 @@ void BoxApp::draw(const GameTimer& gt)
     mCommandList->SetDescriptorHeaps(_countof(heaps), heaps);
 
     dispatchParticlePass(gt);
+
+    D3D12_RESOURCE_BARRIER shadowToDepth = CD3DX12_RESOURCE_BARRIER::Transition(
+        mShadowMap.Get(),
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+        D3D12_RESOURCE_STATE_DEPTH_WRITE);
+    mCommandList->ResourceBarrier(1, &shadowToDepth);
+
+    mCommandList->SetGraphicsRootSignature(mRootSignature.Get());
+    mCommandList->SetPipelineState(mShadowPSO.Get());
+    mCommandList->IASetVertexBuffers(0, 1, &mVertexBufferView);
+    mCommandList->IASetIndexBuffer(&mIndexBufferView);
+    mCommandList->RSSetViewports(1, &mShadowViewport);
+    mCommandList->RSSetScissorRects(1, &mShadowScissorRect);
+
+    UINT shadowDsvDescriptorSize = md3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+    CD3DX12_CPU_DESCRIPTOR_HANDLE shadowDsvHandle(mShadowDsvHeap->GetCPUDescriptorHandleForHeapStart());
+    for (UINT cascadeIndex = 0; cascadeIndex < SHADOW_CASCADE_COUNT; ++cascadeIndex) {
+        mCommandList->ClearDepthStencilView(shadowDsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+        mCommandList->OMSetRenderTargets(0, nullptr, FALSE, &shadowDsvHandle);
+
+        CD3DX12_GPU_DESCRIPTOR_HANDLE shadowPassCbvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart(), getShadowPassCbvIndex(cascadeIndex), mCbvSrvDescriptorSize);
+        mCommandList->SetGraphicsRootDescriptorTable(1, shadowPassCbvHandle);
+
+        for (size_t submeshIndex = 0; submeshIndex < mSubmeshes.size(); ++submeshIndex) {
+            const bool isBillboard = (submeshIndex == mBillboardIndex);
+            const bool isEarthSubmesh = std::binary_search(mEarthSubmeshIndices.begin(), mEarthSubmeshIndices.end(), submeshIndex);
+            if (isBillboard) continue;
+
+            const auto& submesh = mSubmeshes[submeshIndex];
+            mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            CD3DX12_GPU_DESCRIPTOR_HANDLE cbvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart(), submesh.objectCbvHeapIndex, mCbvSrvDescriptorSize);
+            mCommandList->SetGraphicsRootDescriptorTable(0, cbvHandle);
+            mCommandList->DrawIndexedInstanced(submesh.indexCount, 1, submesh.startIndiceIndex, 0, 0);
+        }
+
+        shadowDsvHandle.Offset(1, shadowDsvDescriptorSize);
+    }
+
+    D3D12_RESOURCE_BARRIER shadowToSrv = CD3DX12_RESOURCE_BARRIER::Transition(
+        mShadowMap.Get(),
+        D3D12_RESOURCE_STATE_DEPTH_WRITE,
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    mCommandList->ResourceBarrier(1, &shadowToSrv);
+
+    mCommandList->RSSetViewports(1, &mViewport);
+    mCommandList->RSSetScissorRects(1, &mScissorRect);
 
     mRenderingSystem->beginGeometryPass(mCommandList.Get(), getDepthStencilView());
 
@@ -619,7 +667,8 @@ void BoxApp::draw(const GameTimer& gt)
         }
         else {
             mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-            mCommandList->SetPipelineState(isColumn ? mColumnPSO.Get() : mPSO.Get());
+            //mCommandList->SetPipelineState(isColumn ? mColumnPSO.Get() : mPSO.Get());
+            mCommandList->SetPipelineState(mPSO.Get());
         }
 
 
@@ -663,6 +712,9 @@ void BoxApp::draw(const GameTimer& gt)
 
     CD3DX12_GPU_DESCRIPTOR_HANDLE lightingCbvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart(), getLightingCbvIndex(), mCbvSrvDescriptorSize);
     mCommandList->SetGraphicsRootDescriptorTable(2, lightingCbvHandle);
+
+    CD3DX12_GPU_DESCRIPTOR_HANDLE shadowSrvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart(), mShadowMapSrvIndex, mCbvSrvDescriptorSize);
+    mCommandList->SetGraphicsRootDescriptorTable(3, shadowSrvHandle);
 
     mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     mCommandList->DrawInstanced(3, 1, 0, 0);
@@ -752,10 +804,14 @@ void BoxApp::buildLightingRootSignature() {
     CD3DX12_DESCRIPTOR_RANGE lightingCbvRange;
     lightingCbvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 1);
 
-    CD3DX12_ROOT_PARAMETER slotRootParameter[3];
+    CD3DX12_DESCRIPTOR_RANGE shadowSrvRange;
+    shadowSrvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 3);
+
+    CD3DX12_ROOT_PARAMETER slotRootParameter[4];
     slotRootParameter[0].InitAsDescriptorTable(1, &cbvRange, D3D12_SHADER_VISIBILITY_PIXEL);
     slotRootParameter[1].InitAsDescriptorTable(1, &gbufferSrvRange, D3D12_SHADER_VISIBILITY_PIXEL);
     slotRootParameter[2].InitAsDescriptorTable(1, &lightingCbvRange, D3D12_SHADER_VISIBILITY_PIXEL);
+    slotRootParameter[3].InitAsDescriptorTable(1, &shadowSrvRange, D3D12_SHADER_VISIBILITY_PIXEL);
 
     CD3DX12_STATIC_SAMPLER_DESC staticSampler(0,
         D3D12_FILTER_MIN_MAG_MIP_LINEAR,
@@ -763,7 +819,19 @@ void BoxApp::buildLightingRootSignature() {
         D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
         D3D12_TEXTURE_ADDRESS_MODE_CLAMP);
 
-    CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(3, slotRootParameter, 1, &staticSampler,
+    CD3DX12_STATIC_SAMPLER_DESC shadowSampler(1,
+        D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT,
+        D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+        D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+        D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+        0.0f,
+        16,
+        D3D12_COMPARISON_FUNC_LESS_EQUAL,
+        D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE);
+
+    CD3DX12_STATIC_SAMPLER_DESC samplers[] = { staticSampler, shadowSampler };
+
+    CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(4, slotRootParameter, _countof(samplers), samplers,
         D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
     ComPtr<ID3DBlob> serializedRootSig;

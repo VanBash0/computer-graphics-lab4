@@ -40,7 +40,9 @@ cbuffer cbLighting : register(b1)
 Texture2D gAlbedoMap : register(t0);
 Texture2D gNormalMap : register(t1);
 Texture2D gDepthMap : register(t2);
+Texture2DArray gShadowMap : register(t3);
 SamplerState gSampler : register(s0);
+SamplerComparisonState gShadowSampler : register(s1);
 
 struct VertexOut
 {
@@ -103,7 +105,39 @@ float3 evaluatePointLight(LightData light, float3 worldPos, float3 normalW)
     return light.Color * light.Intensity * ndotl * attenuation;
 }
 
-float3 evaluateDirectionalLight(LightData light, float3 normalW)
+uint chooseCascade(float viewSpaceDepth)
+{
+    if (viewSpaceDepth <= gShadowCascadeSplits.x)
+        return 0;
+    if (viewSpaceDepth <= gShadowCascadeSplits.y)
+        return 1;
+    if (viewSpaceDepth <= gShadowCascadeSplits.z)
+        return 2;
+    return 3;
+}
+
+float sampleShadowMap(float3 worldPos, float3 normalW, float3 toLight)
+{
+    float4 viewPos = mul(float4(worldPos, 1.0f), gView);
+    float viewDepth = abs(viewPos.z);
+    uint cascadeIndex = chooseCascade(viewDepth);
+
+    float4 lightClip = mul(float4(worldPos, 1.0f), gShadowViewProj[cascadeIndex]);
+    float3 shadowCoord = lightClip.xyz / max(lightClip.w, 0.0001f);
+    float2 uv = shadowCoord.xy * float2(0.5f, -0.5f) + 0.5f;
+    if (uv.x <= 0.0f || uv.x >= 1.0f || uv.y <= 0.0f || uv.y >= 1.0f || shadowCoord.z <= 0.0f || shadowCoord.z >= 1.0f)
+    {
+        return 1.0f;
+    }
+
+    float ndotl = saturate(dot(normalW, toLight));
+    float bias = max(0.0005f, 0.0025f * (1.0f - ndotl));
+    float depth = shadowCoord.z - bias;
+
+    return gShadowMap.SampleCmpLevelZero(gShadowSampler, float3(uv, cascadeIndex), depth);
+}
+
+float3 evaluateDirectionalLight(LightData light, float3 worldPos, float3 normalW)
 {
     float3 lightDirection = normalize(light.Direction);
     float3 toLight = -lightDirection;
@@ -113,7 +147,8 @@ float3 evaluateDirectionalLight(LightData light, float3 normalW)
         return 0.0f;
     }
 
-    return light.Color * light.Intensity * ndotl;
+    float shadow = sampleShadowMap(worldPos, normalW, toLight);
+    return light.Color * light.Intensity * ndotl * shadow;
 }
 
 float3 evaluateSpotLight(LightData light, float3 worldPos, float3 normalW)
@@ -156,7 +191,7 @@ float3 evaluateLight(LightData light, float3 worldPos, float3 normalW)
     
     if (light.Type == LIGHT_TYPE_DIRECTIONAL)
     {
-        return evaluateDirectionalLight(light, normalW);
+        return evaluateDirectionalLight(light, worldPos, normalW);
     }
 
     if (light.Type == LIGHT_TYPE_SPOT)
