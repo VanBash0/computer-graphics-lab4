@@ -116,7 +116,7 @@ private:
     const float EARTH_SCALE = 0.05f;
     const float SPEED_FACTOR = 10.f;
     const float DISPLACEMENT_SCALE = 0.4f;
-    const float EARTH_BILLBOARD_SWITCH_DISTANCE = 60.0f;
+    const float EARTH_BILLBOARD_SWITCH_DISTANCE = 0.0f;
     const float BILLBOARD_SIZE = 5.0f;
     const Vector3 TEXTURE_SCALE = Vector3(1.f, 1.f, 1.f);
     const float SPLIT_DISTANCES[5] = { 0.0f, 0.05f, 0.15f, 0.3f, 1.0f };

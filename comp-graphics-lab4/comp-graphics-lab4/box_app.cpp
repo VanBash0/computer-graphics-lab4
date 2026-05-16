@@ -604,14 +604,19 @@ void BoxApp::draw(const GameTimer& gt)
         mCommandList->SetGraphicsRootDescriptorTable(1, shadowPassCbvHandle);
 
         for (size_t submeshIndex = 0; submeshIndex < mSubmeshes.size(); ++submeshIndex) {
-            const bool isBillboard = (submeshIndex == mBillboardIndex);
+            //const bool isBillboard = (submeshIndex == mBillboardIndex);
             const bool isEarthSubmesh = std::binary_search(mEarthSubmeshIndices.begin(), mEarthSubmeshIndices.end(), submeshIndex);
-            if (isBillboard) continue;
+            //if (isEarthSubmesh) continue;
 
             const auto& submesh = mSubmeshes[submeshIndex];
             mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             CD3DX12_GPU_DESCRIPTOR_HANDLE cbvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart(), submesh.objectCbvHeapIndex, mCbvSrvDescriptorSize);
             mCommandList->SetGraphicsRootDescriptorTable(0, cbvHandle);
+
+            CD3DX12_GPU_DESCRIPTOR_HANDLE diffuseSrvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart());
+            diffuseSrvHandle.Offset(submesh.material.diffuseSrvHeapIndex, mCbvSrvDescriptorSize);
+            mCommandList->SetGraphicsRootDescriptorTable(2, diffuseSrvHandle);
+
             mCommandList->DrawIndexedInstanced(submesh.indexCount, 1, submesh.startIndiceIndex, 0, 0);
         }
 
@@ -972,11 +977,12 @@ void BoxApp::buildPso(const std::wstring& shaderName, ComPtr<ID3D12PipelineState
 
 void BoxApp::buildShadowPso() {
     ComPtr<ID3DBlob> vsByteCode = D3DUtil::compileShader(L"shadow_shader.hlsl", nullptr, "ShadowVS", "vs_5_0");
+    ComPtr<ID3DBlob> psByteCode = D3DUtil::compileShader(L"shadow_shader.hlsl", nullptr, "ShadowPS", "ps_5_0");
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
     psoDesc.pRootSignature = mRootSignature.Get();
     psoDesc.VS = { reinterpret_cast<BYTE*>(vsByteCode->GetBufferPointer()), vsByteCode->GetBufferSize() };
-    psoDesc.PS = { nullptr, 0 };
+    psoDesc.PS = { reinterpret_cast<BYTE*>(psByteCode->GetBufferPointer()), psByteCode->GetBufferSize() };
     psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
     psoDesc.SampleMask = UINT_MAX;
     psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);

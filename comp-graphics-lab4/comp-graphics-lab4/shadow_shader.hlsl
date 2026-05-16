@@ -28,7 +28,11 @@ struct VertexIn
 struct VertexOut
 {
     float4 PosH : SV_POSITION;
+    float2 TexC : TEXCOORD;
 };
+
+Texture2D gDiffuseMap : register(t0);
+SamplerState gSampler : register(s0);
 
 VertexOut ShadowVS(VertexIn vin)
 {
@@ -36,6 +40,15 @@ VertexOut ShadowVS(VertexIn vin)
 
     float4 posW = mul(float4(vin.PosL, 1.0f), gWorld);
     vout.PosH = mul(posW, gLightViewProj);
+    
+    float4 texC = mul(float4(vin.TexC, 0.0f, 1.0f), gTexTransform);
+    vout.TexC = texC.xy;
 
     return vout;
+}
+
+void ShadowPS(VertexOut pin)
+{
+    float alpha = gDiffuseMap.Sample(gSampler, pin.TexC).a;
+    clip(alpha - .01f);
 }

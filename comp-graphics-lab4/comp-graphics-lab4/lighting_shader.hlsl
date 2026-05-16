@@ -105,17 +105,6 @@ float3 evaluatePointLight(LightData light, float3 worldPos, float3 normalW)
     return light.Color * light.Intensity * ndotl * attenuation;
 }
 
-uint chooseCascade(float viewSpaceDepth)
-{
-    if (viewSpaceDepth <= gShadowCascadeSplits.x)
-        return 0;
-    if (viewSpaceDepth <= gShadowCascadeSplits.y)
-        return 1;
-    if (viewSpaceDepth <= gShadowCascadeSplits.z)
-        return 2;
-    return 3;
-}
-
 float calcShadow(float3 worldPos)
 {
     float depth = distance(worldPos, gEyePosW);
