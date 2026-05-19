@@ -463,6 +463,10 @@ void BoxApp::update(const GameTimer& gt) {
     );
     passConstants.EyePosW = mEyePos;
     passConstants.AmbientColor = XMFLOAT4(0.08f, 0.08f, 0.1f, 1.0f);
+    passConstants.Exposure = 1.0f;
+    passConstants.Gamma = 2.2f;
+    passConstants.EnableHdr = 1.0f;
+    passConstants.EnableGammaCorrection = 1.0f;
     mPassCB->copyData(0, passConstants);
 
     LightingConstants lightingConstants = {};
@@ -1462,7 +1466,7 @@ UINT BoxApp::getSortListUavIndex() const {
 }
 
 void BoxApp::createDefaultTextures() {
-    const auto createSolidTexture = [this](uint32_t color, ComPtr<ID3D12Resource>& textureResource, ComPtr<ID3D12Resource>& uploadResource) {
+    const auto createSolidTexture = [this](uint32_t color, ComPtr<ID3D12Resource>& textureResource, ComPtr<ID3D12Resource>& uploadResource, DXGI_FORMAT format) {
         D3D12_RESOURCE_DESC texDesc = {};
         texDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
         texDesc.Alignment = 0;
@@ -1470,7 +1474,7 @@ void BoxApp::createDefaultTextures() {
         texDesc.Height = 1;
         texDesc.DepthOrArraySize = 1;
         texDesc.MipLevels = 1;
-        texDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        texDesc.Format = format;
         texDesc.SampleDesc.Count = 1;
         texDesc.SampleDesc.Quality = 0;
         texDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
@@ -1501,9 +1505,9 @@ void BoxApp::createDefaultTextures() {
         mCommandList->ResourceBarrier(1, &barrier);
         };
 
-    createSolidTexture(0xffffffff, mDefaultDiffuseTex, mDefaultDiffuseTexUpload);
-    createSolidTexture(0xffff8080, mDefaultNormalTex, mDefaultNormalTexUpload);
-    createSolidTexture(0xff000000, mDefaultDisplacementTex, mDefaultDisplacementTexUpload);
+    createSolidTexture(0xffffffff, mDefaultDiffuseTex, mDefaultDiffuseTexUpload, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
+    createSolidTexture(0xffff8080, mDefaultNormalTex, mDefaultNormalTexUpload, DXGI_FORMAT_R8G8B8A8_UNORM);
+    createSolidTexture(0xff000000, mDefaultDisplacementTex, mDefaultDisplacementTexUpload, DXGI_FORMAT_R8G8B8A8_UNORM);
 }
 
 void BoxApp::buildCascades(const XMMATRIX& viewProj) {

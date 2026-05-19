@@ -37,6 +37,10 @@ struct PassConstants {
     XMFLOAT3 EyePosW;
     float Padding = 0.0f;
     XMFLOAT4 AmbientColor;
+    float Exposure = 1.0f;
+    float Gamma = 2.2f;
+    float EnableHdr = 1.0f;
+    float EnableGammaCorrection = 1.0f;
 };
 
 struct ShadowPassConstants {

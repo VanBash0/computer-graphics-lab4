@@ -21,6 +21,10 @@ cbuffer cbPass : register(b1)
     float3 gEyePosW;
     float gPassPadding;
     float4 gAmbientColor;
+    float gExposure;
+    float gGamma;
+    float gEnableHdr;
+    float gEnableGammaCorrection;
 };
 
 Texture2D gDiffuseMap : register(t0);
@@ -182,6 +186,7 @@ GBufferOut PS(VertexOut pin)
     float3 mappedNormalW = normalize(normalTS.x * tangentW + normalTS.y * bitangentW + normalTS.z * normalW);
 
     float4 texColor = gDiffuseMap.Sample(gSampler, pin.TexC);
+    texColor.rgb = pow(saturate(texColor.rgb), 2.2f);
     clip(texColor.a - 0.1f);
     
     gout.Albedo = texColor;

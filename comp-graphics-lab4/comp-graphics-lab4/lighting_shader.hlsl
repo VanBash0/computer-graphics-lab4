@@ -8,6 +8,10 @@ cbuffer cbPass : register(b0)
     float3 gEyePosW;
     float gPadding;
     float4 gAmbientColor;
+    float gExposure;
+    float gGamma;
+    float gEnableHdr;
+    float gEnableGammaCorrection;
 };
 
 static const uint LIGHT_TYPE_POINT = 0;
@@ -212,12 +216,12 @@ float3 evaluateLight(LightData light, float3 worldPos, float3 normalW)
 
 float3 applyToneMapping(float3 color)
 {
-    return color / (1.0f + color);
+    return 1.0f - exp(-color * max(gExposure, 0.0001f));
 }
 
 float3 applyGammaCorrection(float3 color)
 {
-    return pow(saturate(color), 1.0f / 2.2f);
+    return pow(saturate(color), 1.0f / max(gGamma, 0.0001f));
 }
 
 float4 PS(VertexOut pin) : SV_Target
@@ -239,8 +243,14 @@ float4 PS(VertexOut pin) : SV_Target
     }
 
     float3 litColor = albedo.rgb * lighting;
-    litColor = applyToneMapping(litColor);
-    litColor = applyGammaCorrection(litColor);
+    if (gEnableHdr > 0.5f)
+    {
+        litColor = applyToneMapping(litColor);
+    }
+    if (gEnableGammaCorrection > 0.5f)
+    {
+        litColor = applyGammaCorrection(litColor);
+    }
 
     return float4(litColor, albedo.a);
 }
