@@ -45,7 +45,7 @@ struct PostProcessConstants {
     float Gamma = 2.2f;
     float EnableGammaCorrection = 1.0f;
 
-    float DistortionFactor = .5f;
+    float DistortionFactor = .55f;
     float EnableDistortion = 0.0f;
     
     float ScreenWidth = 1920.f;
@@ -56,6 +56,11 @@ struct PostProcessConstants {
     float VignetteOuterRadius = 1.25f;
     float VignetteIntensity = .95f;
     float EnableVignette = 0.0f;
+
+    float ScreenHeight = 1080.f;
+    XMFLOAT2 CarPos;
+    float EnableShadertoy = 0.0f;
+    float CarVignetteIntensity = .5f;
 };
 
 struct ShadowPassConstants {
@@ -277,9 +282,13 @@ private:
     bool mEnableColumnTextureAnimation = false;
     bool mEnableFrustumCulling = true;
 
+    const float CAR_SPEED = 0.008f;
+
     bool mEnableBarrelDistortion = false;
     bool mEnableApertureGrille = false;
     bool mEnableVignette = false;
+    bool mEnableShadertoy = false;
+    XMFLOAT2 mCarPos = XMFLOAT2(-0.1f, 1.14f);
 };
 
 #endif // BOX_APP_H

@@ -494,6 +494,9 @@ void BoxApp::update(const GameTimer& gt) {
     postProcessConst.EnableApertureGrille = mEnableApertureGrille ? 1.0f : 0.0f;
     postProcessConst.ScreenWidth = static_cast<float>(mClientWidth);
     postProcessConst.EnableVignette = mEnableVignette ? 1.0f : 0.0f;
+    postProcessConst.ScreenHeight = static_cast<float>(mClientHeight);
+    postProcessConst.EnableShadertoy = mEnableShadertoy ? 1.0f : 0.0f;
+    postProcessConst.CarPos = mCarPos;
     mPostProcessCB->copyData(0, postProcessConst);
 }
 
@@ -1660,5 +1663,27 @@ void BoxApp::checkPostProcessBinds() {
 
     if (GetAsyncKeyState('V') & 0x0001) {
         mEnableVignette = !mEnableVignette;
+    }
+
+    if (GetAsyncKeyState('C') & 0x0001) {
+        mEnableShadertoy = !mEnableShadertoy;
+    }
+
+    if (mEnableShadertoy && mEnableBarrelDistortion) {
+        if (GetAsyncKeyState(VK_LEFT) & 0x0001) {
+            mCarPos.x -= CAR_SPEED;
+        }
+
+        if (GetAsyncKeyState(VK_RIGHT) & 0x0001) {
+            mCarPos.x += CAR_SPEED;
+        }
+        
+        if (GetAsyncKeyState(VK_UP) & 0x0001) {
+            mCarPos.y -= CAR_SPEED;
+        }
+
+        if (GetAsyncKeyState(VK_DOWN) & 0x0001) {
+            mCarPos.y += CAR_SPEED;
+        }
     }
 }
