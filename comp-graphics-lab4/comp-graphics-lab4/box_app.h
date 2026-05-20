@@ -44,6 +44,8 @@ struct PassConstants {
 struct PostProcessConstants {
     float Gamma = 2.2f;
     float EnableGammaCorrection = 1.0f;
+    float DistortionFactor = 0.5f;
+    float EnableDistortion = 0.0f;
 };
 
 struct ShadowPassConstants {
@@ -170,10 +172,10 @@ private:
     void onMouseMove(WPARAM btnState, int x, int y) override;
 
     void createDefaultTextures();
+    void checkPostProcessBinds();
 
     ComPtr<ID3D12Resource> mVertexBufferGPU;
     ComPtr<ID3D12Resource> mVertexBufferUploader;
-
 
     ComPtr<ID3D12Resource> mIndexBufferGPU;
     ComPtr<ID3D12Resource> mIndexBufferUploader;
@@ -264,6 +266,7 @@ private:
     bool mEnableColumnVertexAnimation = false;
     bool mEnableColumnTextureAnimation = false;
     bool mEnableFrustumCulling = true;
+    bool mEnableBarrelDistortion = false;
 };
 
 #endif // BOX_APP_H

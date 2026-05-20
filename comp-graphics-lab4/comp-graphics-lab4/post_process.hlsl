@@ -2,6 +2,8 @@ cbuffer cbPass : register(b0)
 {
     float gGamma;
     float gEnableGammaCorrection;
+    float gDistortionFactor;
+    float gEnableDistortion;
 };
 
 Texture2D gInputColor : register(t0);
@@ -37,9 +39,27 @@ float3 applyGammaCorrection(float3 color)
     return pow(saturate(color), 1.0f / max(gGamma, 0.0001f));
 }
 
+float2 getBarrelDistortion(float2 uv)
+{
+    float gDistortionFactor = 0.5f;
+
+    float2 coord = 2.f * uv - 1.f;
+    float distSq = dot(coord, coord);
+    coord *= 1.f + gDistortionFactor * distSq;
+
+    return 0.5f * (coord + 1.f);
+}
+
 float4 PS(VertexOut pin) : SV_Target
 {
-    float4 color = gInputColor.Sample(gSampler, pin.TexC);
+    float2 uv = pin.TexC;
+    
+    if (gEnableDistortion > 0.5f)
+    {
+        uv = getBarrelDistortion(uv);
+    }
+
+    float4 color = gInputColor.Sample(gSampler, uv);
 
     if (gEnableGammaCorrection > 0.5f)
     {

@@ -488,9 +488,12 @@ void BoxApp::update(const GameTimer& gt) {
     particleSim.EmitCount = 10;
     mParticleSimCB->copyData(0, particleSim);
 
+    checkPostProcessBinds();
     PostProcessConstants postProcessConst = {};
     postProcessConst.EnableGammaCorrection = 1.0f;
     postProcessConst.Gamma = 2.2f;
+    postProcessConst.DistortionFactor = 0.5f;
+    postProcessConst.EnableDistortion = mEnableBarrelDistortion ? 1.0f : 0.0f;
     mPostProcessCB->copyData(0, postProcessConst);
 }
 
@@ -802,7 +805,7 @@ void BoxApp::buildRootSignature() {
     slotRootParameter[4].InitAsDescriptorTable(1, &displacementSrvRange, D3D12_SHADER_VISIBILITY_ALL);
 
     CD3DX12_STATIC_SAMPLER_DESC staticSampler(0,
-        D3D12_FILTER_MIN_MAG_MIP_LINEAR,
+        D3D12_FILTER_ANISOTROPIC,
         D3D12_TEXTURE_ADDRESS_MODE_WRAP,
         D3D12_TEXTURE_ADDRESS_MODE_WRAP,
         D3D12_TEXTURE_ADDRESS_MODE_WRAP);
@@ -888,7 +891,7 @@ void BoxApp::buildPostProcessRootSignature() {
     slotRootParameter[1].InitAsDescriptorTable(1, &inputSrvRange, D3D12_SHADER_VISIBILITY_PIXEL);
 
     CD3DX12_STATIC_SAMPLER_DESC staticSampler(0,
-        D3D12_FILTER_MIN_MAG_MIP_LINEAR,
+        D3D12_FILTER_MIN_MAG_MIP_POINT,
         D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
         D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
         D3D12_TEXTURE_ADDRESS_MODE_CLAMP);
@@ -1644,4 +1647,10 @@ XMMATRIX BoxApp::getLightViewProj(const CascadeFrustum& cascade, const LightData
 
     XMMATRIX lightProj = XMMatrixOrthographicOffCenterLH(minX, maxX, minY, maxY, minZ, maxZ);
     return lightView * lightProj;
+}
+
+void BoxApp::checkPostProcessBinds() {
+    if (GetAsyncKeyState('B') & 0x0001) {
+        mEnableBarrelDistortion = !mEnableBarrelDistortion;
+    }
 }
