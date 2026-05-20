@@ -493,6 +493,7 @@ void BoxApp::update(const GameTimer& gt) {
     postProcessConst.EnableDistortion = mEnableBarrelDistortion ? 1.0f : 0.0f;
     postProcessConst.EnableApertureGrille = mEnableApertureGrille ? 1.0f : 0.0f;
     postProcessConst.ScreenWidth = static_cast<float>(mClientWidth);
+    postProcessConst.EnableVignette = mEnableVignette ? 1.0f : 0.0f;
     mPostProcessCB->copyData(0, postProcessConst);
 }
 
@@ -1655,5 +1656,9 @@ void BoxApp::checkPostProcessBinds() {
 
     if (GetAsyncKeyState('G') & 0x0001) {
         mEnableApertureGrille = !mEnableApertureGrille;
+    }
+
+    if (GetAsyncKeyState('V') & 0x0001) {
+        mEnableVignette = !mEnableVignette;
     }
 }

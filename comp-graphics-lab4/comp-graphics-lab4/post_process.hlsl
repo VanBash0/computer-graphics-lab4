@@ -2,11 +2,18 @@ cbuffer cbPass : register(b0)
 {
     float gGamma;
     float gEnableGammaCorrection;
+    
     float gDistortionFactor;
     float gEnableDistortion;
+    
     float gScreenWidth;
     float gApertureFrequency;
     float gEnableApertureGrille;
+    
+    float gVignetteInnerRadius;
+    float gVignetteOuterRadius;
+    float gVignetteIntensity;
+    float gEnableVignette;
 };
 
 Texture2D gInputColor : register(t0);
@@ -63,6 +70,14 @@ float3 applyApertureGrille(float2 uv, float3 color)
     return color * mask;
 }
 
+float3 applyVignette(float2 uv, float3 color)
+{
+    float2 coord = 2.0f * uv - 1.0f;
+    float dist = length(coord);
+    float vignette = 1.0f - smoothstep(gVignetteInnerRadius, gVignetteOuterRadius, dist) * gVignetteIntensity;
+    return color * vignette;
+}
+
 float4 PS(VertexOut pin) : SV_Target
 {
     float2 uv = pin.TexC;
@@ -70,6 +85,10 @@ float4 PS(VertexOut pin) : SV_Target
     if (gEnableDistortion > 0.5f)
     {
         uv = applyBarrelDistortion(uv);
+        if (uv.x < 0.0f || uv.x > 1.0f || uv.y < 0.0f || uv.y > 1.0f)
+        {
+            return float4(0, 0, 0, 1);
+        }
     }
 
     float4 color = gInputColor.Sample(gSampler, uv);
@@ -82,6 +101,11 @@ float4 PS(VertexOut pin) : SV_Target
     if (gEnableApertureGrille > 0.5f)
     {
         color.rgb = applyApertureGrille(uv, color.rgb);
+    }
+    
+    if (gEnableVignette > 0.5f)
+    {
+        color.rgb = applyVignette(pin.TexC, color.rgb);
     }
 
     return color;

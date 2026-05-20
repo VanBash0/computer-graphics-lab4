@@ -44,11 +44,18 @@ struct PassConstants {
 struct PostProcessConstants {
     float Gamma = 2.2f;
     float EnableGammaCorrection = 1.0f;
+
     float DistortionFactor = 0.15f;
     float EnableDistortion = 0.0f;
+    
     float ScreenWidth = 1920.f;
     float ApertureFrequency = .75f;
     float EnableApertureGrille = 0.0f;
+
+    float VignetteInnerRadius = .5f;
+    float VignetteOuterRadius = 1.25f;
+    float VignetteIntensity = .95f;
+    float EnableVignette = 0.0f;
 };
 
 struct ShadowPassConstants {
@@ -272,6 +279,7 @@ private:
 
     bool mEnableBarrelDistortion = false;
     bool mEnableApertureGrille = false;
+    bool mEnableVignette = false;
 };
 
 #endif // BOX_APP_H
