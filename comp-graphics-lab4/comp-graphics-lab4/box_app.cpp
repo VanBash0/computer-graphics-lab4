@@ -490,10 +490,9 @@ void BoxApp::update(const GameTimer& gt) {
 
     checkPostProcessBinds();
     PostProcessConstants postProcessConst = {};
-    postProcessConst.EnableGammaCorrection = 1.0f;
-    postProcessConst.Gamma = 2.2f;
-    postProcessConst.DistortionFactor = 0.5f;
     postProcessConst.EnableDistortion = mEnableBarrelDistortion ? 1.0f : 0.0f;
+    postProcessConst.EnableApertureGrille = mEnableApertureGrille ? 1.0f : 0.0f;
+    postProcessConst.ScreenWidth = static_cast<float>(mClientWidth);
     mPostProcessCB->copyData(0, postProcessConst);
 }
 
@@ -1652,5 +1651,9 @@ XMMATRIX BoxApp::getLightViewProj(const CascadeFrustum& cascade, const LightData
 void BoxApp::checkPostProcessBinds() {
     if (GetAsyncKeyState('B') & 0x0001) {
         mEnableBarrelDistortion = !mEnableBarrelDistortion;
+    }
+
+    if (GetAsyncKeyState('G') & 0x0001) {
+        mEnableApertureGrille = !mEnableApertureGrille;
     }
 }

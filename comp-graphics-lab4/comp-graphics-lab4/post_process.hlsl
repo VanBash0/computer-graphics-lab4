@@ -4,6 +4,9 @@ cbuffer cbPass : register(b0)
     float gEnableGammaCorrection;
     float gDistortionFactor;
     float gEnableDistortion;
+    float gScreenWidth;
+    float gApertureFrequency;
+    float gEnableApertureGrille;
 };
 
 Texture2D gInputColor : register(t0);
@@ -39,15 +42,25 @@ float3 applyGammaCorrection(float3 color)
     return pow(saturate(color), 1.0f / max(gGamma, 0.0001f));
 }
 
-float2 getBarrelDistortion(float2 uv)
+float2 applyBarrelDistortion(float2 uv)
 {
-    float gDistortionFactor = 0.5f;
-
     float2 coord = 2.f * uv - 1.f;
     float distSq = dot(coord, coord);
     coord *= 1.f + gDistortionFactor * distSq;
 
     return 0.5f * (coord + 1.f);
+}
+
+float3 applyApertureGrille(float2 uv, float3 color)
+{
+    float maskFrequency = gApertureFrequency * gScreenWidth;
+    
+    float3 mask;
+    mask.r = sin(maskFrequency * uv.x) * 0.12f + 0.88f;
+    mask.g = sin(maskFrequency * uv.x + 2.094f) * 0.12f + 0.88f;
+    mask.b = sin(maskFrequency * uv.x + 4.188f) * 0.12f + 0.88f;
+    
+    return color * mask;
 }
 
 float4 PS(VertexOut pin) : SV_Target
@@ -56,7 +69,7 @@ float4 PS(VertexOut pin) : SV_Target
     
     if (gEnableDistortion > 0.5f)
     {
-        uv = getBarrelDistortion(uv);
+        uv = applyBarrelDistortion(uv);
     }
 
     float4 color = gInputColor.Sample(gSampler, uv);
@@ -64,6 +77,11 @@ float4 PS(VertexOut pin) : SV_Target
     if (gEnableGammaCorrection > 0.5f)
     {
         color.rgb = applyGammaCorrection(color.rgb);
+    }
+    
+    if (gEnableApertureGrille > 0.5f)
+    {
+        color.rgb = applyApertureGrille(uv, color.rgb);
     }
 
     return color;
