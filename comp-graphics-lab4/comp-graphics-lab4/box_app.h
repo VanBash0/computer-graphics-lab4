@@ -45,7 +45,7 @@ struct PostProcessConstants {
     float Gamma = 2.2f;
     float EnableGammaCorrection = 1.0f;
 
-    float DistortionFactor = 0.15f;
+    float DistortionFactor = .5f;
     float EnableDistortion = 0.0f;
     
     float ScreenWidth = 1920.f;

@@ -618,9 +618,9 @@ void BoxApp::draw(const GameTimer& gt)
         mCommandList->SetGraphicsRootDescriptorTable(1, shadowPassCbvHandle);
 
         for (size_t submeshIndex = 0; submeshIndex < mSubmeshes.size(); ++submeshIndex) {
-            //const bool isBillboard = (submeshIndex == mBillboardIndex);
-            const bool isEarthSubmesh = std::binary_search(mEarthSubmeshIndices.begin(), mEarthSubmeshIndices.end(), submeshIndex);
-            //if (isEarthSubmesh) continue;
+            const bool isBillboard = (submeshIndex == mBillboardIndex);
+            //const bool isEarthSubmesh = std::binary_search(mEarthSubmeshIndices.begin(), mEarthSubmeshIndices.end(), submeshIndex);
+            if (isBillboard) continue;
 
             const auto& submesh = mSubmeshes[submeshIndex];
             mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -738,6 +738,19 @@ void BoxApp::draw(const GameTimer& gt)
     mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     mCommandList->DrawInstanced(3, 1, 0, 0);
 
+    D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = getDepthStencilView();
+    mRenderingSystem->bindLightingTarget(mCommandList.Get(), dsvHandle);
+    mCommandList->SetGraphicsRootSignature(mParticleRootSignature.Get());
+    mCommandList->SetPipelineState(mParticlePSO.Get());
+    mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
+    mCommandList->IASetVertexBuffers(0, 1, &mParticleIndexBufferView);
+
+    CD3DX12_GPU_DESCRIPTOR_HANDLE particlePassCbvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart(), getPassCbvIndex(), mCbvSrvDescriptorSize);
+    mCommandList->SetGraphicsRootDescriptorTable(0, particlePassCbvHandle);
+    CD3DX12_GPU_DESCRIPTOR_HANDLE particleSrvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart(), getParticlePoolSrvIndex(), mCbvSrvDescriptorSize);
+    mCommandList->SetGraphicsRootDescriptorTable(1, particleSrvHandle);
+    mCommandList->DrawInstanced(PARTICLE_COUNT, 1, 0, 0);
+
     mRenderingSystem->endLightingPass(mCommandList.Get());
 
     mRenderingSystem->beginPostProcessPass(mCommandList.Get(), rtvHandle);
@@ -750,19 +763,6 @@ void BoxApp::draw(const GameTimer& gt)
     mCommandList->SetGraphicsRootDescriptorTable(1, mRenderingSystem->getLightingSrvHandle());
     mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
     mCommandList->DrawInstanced(4, 1, 0, 0);
-
-    D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = getDepthStencilView();
-    mCommandList->OMSetRenderTargets(1, &rtvHandle, TRUE, &dsvHandle);
-    mCommandList->SetGraphicsRootSignature(mParticleRootSignature.Get());
-    mCommandList->SetPipelineState(mParticlePSO.Get());
-    mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
-    mCommandList->IASetVertexBuffers(0, 1, &mParticleIndexBufferView);
-
-    CD3DX12_GPU_DESCRIPTOR_HANDLE particlePassCbvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart(), getPassCbvIndex(), mCbvSrvDescriptorSize);
-    mCommandList->SetGraphicsRootDescriptorTable(0, particlePassCbvHandle);
-    CD3DX12_GPU_DESCRIPTOR_HANDLE particleSrvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart(), getParticlePoolSrvIndex(), mCbvSrvDescriptorSize);
-    mCommandList->SetGraphicsRootDescriptorTable(1, particleSrvHandle);
-    mCommandList->DrawInstanced(PARTICLE_COUNT, 1, 0, 0);
 
     barrier = CD3DX12_RESOURCE_BARRIER::Transition(
         getCurrentBackBufferResource(),

@@ -103,6 +103,10 @@ void RenderingSystem::beginLightingPass(ID3D12GraphicsCommandList* cmdList) {
     cmdList->OMSetRenderTargets(1, &mhLightingCpuRtv, FALSE, nullptr);
 }
 
+void RenderingSystem::bindLightingTarget(ID3D12GraphicsCommandList* cmdList, D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle) {
+    cmdList->OMSetRenderTargets(1, &mhLightingCpuRtv, FALSE, &dsvHandle);
+}
+
 void RenderingSystem::endLightingPass(ID3D12GraphicsCommandList* cmdList) {
     auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(mLightingBuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_GENERIC_READ);
     cmdList->ResourceBarrier(1, &barrier);

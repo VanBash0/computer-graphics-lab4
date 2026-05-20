@@ -20,6 +20,7 @@ public:
     void beginGeometryPass(ID3D12GraphicsCommandList* cmdList, D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle);
     void endGeometryPass(ID3D12GraphicsCommandList* cmdList);
     void beginLightingPass(ID3D12GraphicsCommandList* cmdList);
+    void bindLightingTarget(ID3D12GraphicsCommandList* cmdList, D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle);
     void endLightingPass(ID3D12GraphicsCommandList* cmdList);
     void beginPostProcessPass(ID3D12GraphicsCommandList* cmdList, D3D12_CPU_DESCRIPTOR_HANDLE backBufferRtv);
 
