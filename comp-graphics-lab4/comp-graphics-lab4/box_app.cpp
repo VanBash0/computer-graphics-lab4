@@ -268,13 +268,13 @@ std::vector<size_t> BoxApp::collectVisibleSubmeshes() const {
     return mSceneOctree.query(worldFrustum);
 }
 
-void BoxApp::buildConstantBuffer()
-{
+void BoxApp::buildConstantBuffer() {
     mObjectCB = new UploadBuffer<ObjectConstants>(md3dDevice.Get(), static_cast<UINT>(mSubmeshes.size()), true);
     mPassCB = new UploadBuffer<PassConstants>(md3dDevice.Get(), 1, true);
     mLightingCB = new UploadBuffer<LightingConstants>(md3dDevice.Get(), 1, true);
     mShadowPassCB = new UploadBuffer<ShadowPassConstants>(md3dDevice.Get(), SHADOW_CASCADE_COUNT, true);
     mParticleSimCB = new UploadBuffer<ParticleSimConstants>(md3dDevice.Get(), 1, true);
+    mPostProcessCB = new UploadBuffer<PostProcessConstants>(md3dDevice.Get(), 1, true);
 }
 
 void BoxApp::update(const GameTimer& gt) {
@@ -465,10 +465,7 @@ void BoxApp::update(const GameTimer& gt) {
     );
     passConstants.EyePosW = mEyePos;
     passConstants.AmbientColor = XMFLOAT4(0.08f, 0.08f, 0.1f, 1.0f);
-    passConstants.Exposure = 1.0f;
-    passConstants.Gamma = 2.2f;
     passConstants.EnableHdr = 1.0f;
-    passConstants.EnableGammaCorrection = 1.0f;
     mPassCB->copyData(0, passConstants);
 
     LightingConstants lightingConstants = {};
@@ -490,6 +487,11 @@ void BoxApp::update(const GameTimer& gt) {
     particleSim.MaxLifetime = 3.5f;
     particleSim.EmitCount = 10;
     mParticleSimCB->copyData(0, particleSim);
+
+    PostProcessConstants postProcessConst = {};
+    postProcessConst.EnableGammaCorrection = 1.0f;
+    postProcessConst.Gamma = 2.2f;
+    mPostProcessCB->copyData(0, postProcessConst);
 }
 
 BoxApp::~BoxApp()
@@ -508,6 +510,9 @@ BoxApp::~BoxApp()
 
     delete mParticleSimCB;
     mParticleSimCB = nullptr;
+
+    delete mPostProcessCB;
+    mPostProcessCB = nullptr;
 }
 
 void BoxApp::onMouseMove(WPARAM btnState, int x, int y) {
@@ -735,7 +740,10 @@ void BoxApp::draw(const GameTimer& gt)
     mRenderingSystem->beginPostProcessPass(mCommandList.Get(), rtvHandle);
     mCommandList->SetGraphicsRootSignature(mPostProcessRootSignature.Get());
     mCommandList->SetPipelineState(mPostProcessPSO.Get());
-    mCommandList->SetGraphicsRootDescriptorTable(0, passCbvHandle);
+
+    CD3DX12_GPU_DESCRIPTOR_HANDLE postProcessCbvHandle(mCbvSrvHeap->GetGPUDescriptorHandleForHeapStart(), getPostProcessCbvIndex(), mCbvSrvDescriptorSize);
+    mCommandList->SetGraphicsRootDescriptorTable(0, postProcessCbvHandle);
+
     mCommandList->SetGraphicsRootDescriptorTable(1, mRenderingSystem->getLightingSrvHandle());
     mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
     mCommandList->DrawInstanced(4, 1, 0, 0);
@@ -1236,7 +1244,7 @@ void BoxApp::loadTextures() {
 void BoxApp::buildCbvSrvHeap() {
     UINT numTextures = static_cast<UINT>(mTextures.size());
     const UINT objectCbvCount = static_cast<UINT>(mSubmeshes.size());
-    UINT numDescriptors = objectCbvCount + 3 + SHADOW_CASCADE_COUNT + GBuffer::mTexturesNum + 1 + 3 + numTextures + 1 + 5;
+    UINT numDescriptors = objectCbvCount + 4 + SHADOW_CASCADE_COUNT + GBuffer::mTexturesNum + 1 + 3 + numTextures + 1 + 5;
 
     D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
     heapDesc.NumDescriptors = numDescriptors;
@@ -1280,6 +1288,11 @@ void BoxApp::buildCbvSrvHeap() {
 
     cbvDesc.BufferLocation = mParticleSimCB->getResource()->GetGPUVirtualAddress();
     cbvDesc.SizeInBytes = D3DUtil::calcConstantBufferByteSize(sizeof(ParticleSimConstants));
+    md3dDevice->CreateConstantBufferView(&cbvDesc, handle);
+    handle.Offset(1, mCbvSrvDescriptorSize);
+
+    cbvDesc.BufferLocation = mPostProcessCB->getResource()->GetGPUVirtualAddress();
+    cbvDesc.SizeInBytes = D3DUtil::calcConstantBufferByteSize(sizeof(PostProcessConstants));
     md3dDevice->CreateConstantBufferView(&cbvDesc, handle);
     handle.Offset(1, mCbvSrvDescriptorSize);
 
@@ -1483,8 +1496,12 @@ UINT BoxApp::getShadowPassCbvIndex(UINT cascadeIndex) const {
     return getLightingCbvIndex() + 1 + cascadeIndex;
 }
 
-UINT BoxApp::getGBufferSrvStartIndex() const {
+UINT BoxApp::getPostProcessCbvIndex() const {
     return getShadowPassCbvIndex(SHADOW_CASCADE_COUNT - 1) + 2;
+}
+
+UINT BoxApp::getGBufferSrvStartIndex() const {
+    return getPostProcessCbvIndex() + 1;
 }
 
 UINT BoxApp::getDefaultTextureSrvStartIndex() const {

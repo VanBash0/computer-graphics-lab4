@@ -38,8 +38,11 @@ struct PassConstants {
     float Padding = 0.0f;
     XMFLOAT4 AmbientColor;
     float Exposure = 1.0f;
-    float Gamma = 2.2f;
     float EnableHdr = 1.0f;
+};
+
+struct PostProcessConstants {
+    float Gamma = 2.2f;
     float EnableGammaCorrection = 1.0f;
 };
 
@@ -153,6 +156,7 @@ private:
     UINT getPassCbvIndex() const;
     UINT getLightingCbvIndex() const;
     UINT getShadowPassCbvIndex(UINT cascadeIndex) const;
+    UINT getPostProcessCbvIndex() const;
     UINT getGBufferSrvStartIndex() const;
     UINT getDefaultTextureSrvStartIndex() const;
     UINT getParticlePoolSrvIndex() const;
@@ -179,6 +183,7 @@ private:
     UploadBuffer<LightingConstants>* mLightingCB = nullptr;
     UploadBuffer<ShadowPassConstants>* mShadowPassCB = nullptr;
     UploadBuffer<ParticleSimConstants>* mParticleSimCB = nullptr;
+    UploadBuffer<PostProcessConstants>* mPostProcessCB = nullptr;
 
     ComPtr<ID3D12RootSignature> mRootSignature;
     ComPtr<ID3D12RootSignature> mParticleRootSignature;

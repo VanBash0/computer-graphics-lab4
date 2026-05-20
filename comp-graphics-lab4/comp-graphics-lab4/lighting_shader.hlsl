@@ -9,9 +9,7 @@ cbuffer cbPass : register(b0)
     float gPadding;
     float4 gAmbientColor;
     float gExposure;
-    float gGamma;
     float gEnableHdr;
-    float gEnableGammaCorrection;
 };
 
 static const uint LIGHT_TYPE_POINT = 0;
