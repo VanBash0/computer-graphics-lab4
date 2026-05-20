@@ -49,6 +49,7 @@
   <ItemGroup>
     <None Include="packages.config" />
     <None Include="lighting_shader.hlsl" />
+    <None Include="post_process.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="d3dapp.h">

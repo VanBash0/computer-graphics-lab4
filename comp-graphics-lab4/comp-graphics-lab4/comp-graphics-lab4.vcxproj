@@ -143,6 +143,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="lighting_shader.hlsl" />
+    <None Include="post_process.hlsl" />
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>

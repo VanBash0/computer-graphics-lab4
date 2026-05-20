@@ -100,7 +100,7 @@ void D3DApp::createSwapChain() {
 
 void D3DApp::createDescriptorHeaps() {
     D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc = {};
-    rtvHeapDesc.NumDescriptors = swapChainBufferCount + GBuffer::mTexturesNum;
+    rtvHeapDesc.NumDescriptors = swapChainBufferCount + GBuffer::mTexturesNum + 1;
     rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
     rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
     rtvHeapDesc.NodeMask = 0;

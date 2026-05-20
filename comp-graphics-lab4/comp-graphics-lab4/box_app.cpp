@@ -107,6 +107,7 @@ void BoxApp::buildResources() {
     buildParticleRootSignature();
     buildParticleComputeRootSignature();
     buildLightingRootSignature();
+    buildPostProcessRootSignature();
     buildConstantBuffer();
     buildParticleResources();
     createDefaultTextures();
@@ -118,6 +119,7 @@ void BoxApp::buildResources() {
     buildPso(L"main_shader.hlsl", mEarthTessPSO, true);
     buildPso(L"column_shader.hlsl", mColumnPSO);
     buildPso(L"lighting_shader.hlsl", mLightingPSO);
+    buildPso(L"post_process.hlsl", mPostProcessPSO);
     buildShadowPso();
     buildParticlePso();
     failCheck(mCommandList->Close());
@@ -709,7 +711,7 @@ void BoxApp::draw(const GameTimer& gt)
     const float clearColor[4] = { 0.2f, 0.2f, 0.3f, 1.0f };
     mCommandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 
-    mRenderingSystem->beginLightingPass(mCommandList.Get(), rtvHandle);
+    mRenderingSystem->beginLightingPass(mCommandList.Get());
     mCommandList->SetGraphicsRootSignature(mLightingRootSignature.Get());
     mCommandList->SetPipelineState(mLightingPSO.Get());
 
@@ -727,6 +729,16 @@ void BoxApp::draw(const GameTimer& gt)
 
     mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     mCommandList->DrawInstanced(3, 1, 0, 0);
+
+    mRenderingSystem->endLightingPass(mCommandList.Get());
+
+    mRenderingSystem->beginPostProcessPass(mCommandList.Get(), rtvHandle);
+    mCommandList->SetGraphicsRootSignature(mPostProcessRootSignature.Get());
+    mCommandList->SetPipelineState(mPostProcessPSO.Get());
+    mCommandList->SetGraphicsRootDescriptorTable(0, passCbvHandle);
+    mCommandList->SetGraphicsRootDescriptorTable(1, mRenderingSystem->getLightingSrvHandle());
+    mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+    mCommandList->DrawInstanced(4, 1, 0, 0);
 
     D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = getDepthStencilView();
     mCommandList->OMSetRenderTargets(1, &rtvHandle, TRUE, &dsvHandle);
@@ -856,6 +868,39 @@ void BoxApp::buildLightingRootSignature() {
         IID_PPV_ARGS(&mLightingRootSignature)));
 }
 
+void BoxApp::buildPostProcessRootSignature() {
+    CD3DX12_DESCRIPTOR_RANGE cbvRange;
+    cbvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0);
+
+    CD3DX12_DESCRIPTOR_RANGE inputSrvRange;
+    inputSrvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+
+    CD3DX12_ROOT_PARAMETER slotRootParameter[2];
+    slotRootParameter[0].InitAsDescriptorTable(1, &cbvRange, D3D12_SHADER_VISIBILITY_PIXEL);
+    slotRootParameter[1].InitAsDescriptorTable(1, &inputSrvRange, D3D12_SHADER_VISIBILITY_PIXEL);
+
+    CD3DX12_STATIC_SAMPLER_DESC staticSampler(0,
+        D3D12_FILTER_MIN_MAG_MIP_LINEAR,
+        D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+        D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+        D3D12_TEXTURE_ADDRESS_MODE_CLAMP);
+
+    CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(2, slotRootParameter, 1, &staticSampler,
+        D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+
+    ComPtr<ID3DBlob> serializedRootSig;
+    ComPtr<ID3DBlob> errorBlob;
+    D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1,
+        serializedRootSig.GetAddressOf(),
+        errorBlob.GetAddressOf());
+
+    failCheck(md3dDevice->CreateRootSignature(
+        0,
+        serializedRootSig->GetBufferPointer(),
+        serializedRootSig->GetBufferSize(),
+        IID_PPV_ARGS(&mPostProcessRootSignature)));
+}
+
 void BoxApp::buildParticleRootSignature() {
     CD3DX12_DESCRIPTOR_RANGE passCbvRange;
     passCbvRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0);
@@ -930,7 +975,8 @@ void BoxApp::buildPso(const std::wstring& shaderName, ComPtr<ID3D12PipelineState
     ZeroMemory(&psoDesc, sizeof(D3D12_GRAPHICS_PIPELINE_STATE_DESC));
 
     const bool isLightingPass = (shaderName == L"lighting_shader.hlsl");
-    psoDesc.pRootSignature = isLightingPass ? mLightingRootSignature.Get() : mRootSignature.Get();
+    const bool isPostProcessPass = (shaderName == L"post_process.hlsl");
+    psoDesc.pRootSignature = isLightingPass ? mLightingRootSignature.Get() : (isPostProcessPass ? mPostProcessRootSignature.Get() : mRootSignature.Get());
 
     psoDesc.VS = {
         reinterpret_cast<BYTE*>(mvsByteCode->GetBufferPointer()),
@@ -958,7 +1004,7 @@ void BoxApp::buildPso(const std::wstring& shaderName, ComPtr<ID3D12PipelineState
     psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
     psoDesc.SampleMask = UINT_MAX;
     psoDesc.PrimitiveTopologyType = enableTessellation ? D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH : D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    if (isLightingPass) {
+    if (isLightingPass || isPostProcessPass) {
         psoDesc.NumRenderTargets = 1;
         psoDesc.RTVFormats[0] = mBackBufferFormat;
         psoDesc.DSVFormat = DXGI_FORMAT_UNKNOWN;
@@ -1190,7 +1236,7 @@ void BoxApp::loadTextures() {
 void BoxApp::buildCbvSrvHeap() {
     UINT numTextures = static_cast<UINT>(mTextures.size());
     const UINT objectCbvCount = static_cast<UINT>(mSubmeshes.size());
-    UINT numDescriptors = objectCbvCount + 3 + SHADOW_CASCADE_COUNT + GBuffer::mTexturesNum + 3 + numTextures + 1 + 5;
+    UINT numDescriptors = objectCbvCount + 3 + SHADOW_CASCADE_COUNT + GBuffer::mTexturesNum + 1 + 3 + numTextures + 1 + 5;
 
     D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
     heapDesc.NumDescriptors = numDescriptors;
@@ -1442,7 +1488,7 @@ UINT BoxApp::getGBufferSrvStartIndex() const {
 }
 
 UINT BoxApp::getDefaultTextureSrvStartIndex() const {
-    return getGBufferSrvStartIndex() + GBuffer::mTexturesNum;
+    return getGBufferSrvStartIndex() + GBuffer::mTexturesNum + 1;
 }
 
 UINT BoxApp::getParticlePoolSrvIndex() const {

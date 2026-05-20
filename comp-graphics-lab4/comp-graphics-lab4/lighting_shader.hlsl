@@ -213,15 +213,9 @@ float3 evaluateLight(LightData light, float3 worldPos, float3 normalW)
     return 0.0f;
 }
 
-
 float3 applyToneMapping(float3 color)
 {
     return 1.0f - exp(-color * max(gExposure, 0.0001f));
-}
-
-float3 applyGammaCorrection(float3 color)
-{
-    return pow(saturate(color), 1.0f / max(gGamma, 0.0001f));
 }
 
 float4 PS(VertexOut pin) : SV_Target
@@ -247,10 +241,5 @@ float4 PS(VertexOut pin) : SV_Target
     {
         litColor = applyToneMapping(litColor);
     }
-    if (gEnableGammaCorrection > 0.5f)
-    {
-        litColor = applyGammaCorrection(litColor);
-    }
-
     return float4(litColor, albedo.a);
 }

@@ -133,6 +133,7 @@ private:
     void buildParticleRootSignature();
     void buildParticleComputeRootSignature();
     void buildLightingRootSignature();
+    void buildPostProcessRootSignature();
     void buildPso(const std::wstring& shaderName, ComPtr<ID3D12PipelineState>& pso, bool enableTessellation = false);
     void buildShadowPso();
     void buildParticlePso();
@@ -183,10 +184,12 @@ private:
     ComPtr<ID3D12RootSignature> mParticleRootSignature;
     ComPtr<ID3D12RootSignature> mParticleComputeRootSignature;
     ComPtr<ID3D12RootSignature> mLightingRootSignature;
+    ComPtr<ID3D12RootSignature> mPostProcessRootSignature;
     ComPtr<ID3D12PipelineState> mPSO;
     ComPtr<ID3D12PipelineState> mEarthTessPSO;
     ComPtr<ID3D12PipelineState> mColumnPSO;
     ComPtr<ID3D12PipelineState> mLightingPSO;
+    ComPtr<ID3D12PipelineState> mPostProcessPSO;
     ComPtr<ID3D12PipelineState> mShadowPSO;
     ComPtr<ID3D12PipelineState> mParticlePSO;
     ComPtr<ID3D12PipelineState> mParticleEmitPSO;
