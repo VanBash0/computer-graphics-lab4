@@ -60,7 +60,13 @@ struct PostProcessConstants {
     float ScreenHeight = 1080.f;
     XMFLOAT2 CarPos;
     float EnableShadertoy = 0.0f;
-    float CarVignetteIntensity = .5f;
+    float CarVignetteIntensity = .7f;
+
+    float PixelateSpeed = 30.f;
+    float PixelateAmplitude = 1.f;
+    float MaxPixelSize = 15.f;
+    float EnablePixelate = 0.0f;
+    float TotalTime = 0.0f;
 };
 
 struct ShadowPassConstants {
@@ -288,6 +294,7 @@ private:
     bool mEnableApertureGrille = false;
     bool mEnableVignette = false;
     bool mEnableShadertoy = false;
+    bool mEnablePixelate = false;
     XMFLOAT2 mCarPos = XMFLOAT2(-0.1f, 1.14f);
 };
 

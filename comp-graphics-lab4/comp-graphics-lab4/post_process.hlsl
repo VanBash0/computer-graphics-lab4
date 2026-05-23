@@ -19,6 +19,12 @@ cbuffer cbPass : register(b0)
     float2 gCarPos;
     float gEnableShadertoy;
     float gCarVignetteIntensity;
+    
+    float gPixelateSpeed;
+    float gPixelateAmplitude;
+    float gMaxPixelSize;
+    float gEnablePixelate;
+    float gTotalTime;
 };
 
 Texture2D gInputColor : register(t0);
@@ -127,6 +133,16 @@ float4 getShadertoyGameColor(float2 uv)
     return float4(col, 1.0f);
 }
 
+float2 applyPixelate(float2 uv)
+{
+    float pixelSize = max(floor(gPixelateSpeed * sin(gPixelateAmplitude * gTotalTime) - gPixelateSpeed + gMaxPixelSize), 1.0f);
+    float2 fragCoord = float2(uv.x * gScreenWidth, uv.y * gScreenHeight);
+    uv = floor(fragCoord / pixelSize) * pixelSize;
+    uv.x /= gScreenWidth;
+    uv.y /= gScreenHeight;
+    return uv;
+}
+
 float4 PS(VertexOut pin) : SV_Target
 {
     float2 uv = pin.TexC;
@@ -146,6 +162,13 @@ float4 PS(VertexOut pin) : SV_Target
             }
         }
     }
+    
+    float2 uvAfterDistortion = uv;
+    
+    if (gEnablePixelate > 0.5f)
+    {
+        uv = applyPixelate(uv);
+    }
 
     float4 color = gInputColor.Sample(gSampler, uv);
 
@@ -156,7 +179,7 @@ float4 PS(VertexOut pin) : SV_Target
 
     if (gEnableApertureGrille > 0.5f)
     {
-        color.rgb = applyApertureGrille(uv, color.rgb);
+        color.rgb = applyApertureGrille(uvAfterDistortion, color.rgb);
     }
 
     if (gEnableVignette > 0.5f)

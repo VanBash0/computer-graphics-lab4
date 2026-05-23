@@ -160,7 +160,7 @@ void BoxApp::buildBuffers() {
     bmSubmesh.material.diffuseTextureName = "billboard";
     billboardMesh.submeshes.push_back(bmSubmesh);
 
-    appendMesh(mesh, billboardMesh, 1.0f);
+    //appendMesh(mesh, billboardMesh, 1.0f);
 
     const UINT vbByteSize = static_cast<UINT>(mesh.vertices.size() * sizeof(Vertex));
     const UINT ibByteSize = static_cast<UINT>(mesh.indices.size() * sizeof(uint32_t));
@@ -497,6 +497,8 @@ void BoxApp::update(const GameTimer& gt) {
     postProcessConst.ScreenHeight = static_cast<float>(mClientHeight);
     postProcessConst.EnableShadertoy = mEnableShadertoy ? 1.0f : 0.0f;
     postProcessConst.CarPos = mCarPos;
+    postProcessConst.TotalTime = totalTime;
+    postProcessConst.EnablePixelate = mEnablePixelate;
     mPostProcessCB->copyData(0, postProcessConst);
 }
 
@@ -1669,6 +1671,10 @@ void BoxApp::checkPostProcessBinds() {
         mEnableShadertoy = !mEnableShadertoy;
     }
 
+    if (GetAsyncKeyState('P') & 0x0001) {
+        mEnablePixelate = !mEnablePixelate;
+    }
+
     if (mEnableShadertoy && mEnableBarrelDistortion) {
         if (GetAsyncKeyState(VK_LEFT) & 0x0001) {
             mCarPos.x -= CAR_SPEED;
@@ -1679,11 +1685,11 @@ void BoxApp::checkPostProcessBinds() {
         }
         
         if (GetAsyncKeyState(VK_UP) & 0x0001) {
-            mCarPos.y -= CAR_SPEED;
+            mCarPos.y -= CAR_SPEED * 2;
         }
 
         if (GetAsyncKeyState(VK_DOWN) & 0x0001) {
-            mCarPos.y += CAR_SPEED;
+            mCarPos.y += CAR_SPEED * 2;
         }
     }
 }
