@@ -25,6 +25,10 @@ cbuffer cbPass : register(b0)
     float gMaxPixelSize;
     float gEnablePixelate;
     float gTotalTime;
+    
+    float gShakingInterval;
+    float gShakingStrength;
+    float gEnableShaking;
 };
 
 Texture2D gInputColor : register(t0);
@@ -143,9 +147,28 @@ float2 applyPixelate(float2 uv)
     return uv;
 }
 
+float rand(float x)
+{
+    return frac(sin(x * 12.9898 + 78.233) * 43758.5453);
+}
+
+float2 applyShaking(float2 uv)
+{
+    float timeSeed = floor(gTotalTime / gShakingInterval);
+    float offsetX = rand(timeSeed) - 0.5f;
+    float offsetY = rand(timeSeed + 42.f) - 0.5f;
+    float2 offset = float2(offsetX, offsetY) * gShakingStrength;
+    return uv + offset;
+}
+
 float4 PS(VertexOut pin) : SV_Target
 {
     float2 uv = pin.TexC;
+    
+    if (gEnableShaking > 0.5f)
+    {
+        uv = applyShaking(uv);
+    }
 
     if (gEnableDistortion > 0.5f)
     {

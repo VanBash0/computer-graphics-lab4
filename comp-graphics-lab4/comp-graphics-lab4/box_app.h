@@ -64,9 +64,13 @@ struct PostProcessConstants {
 
     float PixelateSpeed = 30.f;
     float PixelateAmplitude = 1.f;
-    float MaxPixelSize = 15.f;
+    float MaxPixelSize = 30.f;
     float EnablePixelate = 0.0f;
     float TotalTime = 0.0f;
+
+    float ShakingInterval = 0.03f;
+    float ShakingStrength = 0.001f;
+    float EnableShaking = 0.0f;
 };
 
 struct ShadowPassConstants {
@@ -295,6 +299,7 @@ private:
     bool mEnableVignette = false;
     bool mEnableShadertoy = false;
     bool mEnablePixelate = false;
+    bool mEnableShaking = false;
     XMFLOAT2 mCarPos = XMFLOAT2(-0.1f, 1.14f);
 };
 

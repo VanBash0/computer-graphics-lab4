@@ -499,6 +499,7 @@ void BoxApp::update(const GameTimer& gt) {
     postProcessConst.CarPos = mCarPos;
     postProcessConst.TotalTime = totalTime;
     postProcessConst.EnablePixelate = mEnablePixelate;
+    postProcessConst.EnableShaking = mEnableShaking;
     mPostProcessCB->copyData(0, postProcessConst);
 }
 
@@ -1673,6 +1674,10 @@ void BoxApp::checkPostProcessBinds() {
 
     if (GetAsyncKeyState('P') & 0x0001) {
         mEnablePixelate = !mEnablePixelate;
+    }
+
+    if (GetAsyncKeyState('H') & 0x0001) {
+        mEnableShaking = !mEnableShaking;
     }
 
     if (mEnableShadertoy && mEnableBarrelDistortion) {
